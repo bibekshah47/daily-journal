@@ -21,3 +21,34 @@ h2 {
 p {
     color: #666666;
 }
+
+
+/* Journal writing area */
+textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 15px;
+    border: 1px solid #cccccc;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 16px;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+/* Save Entry button */
+button {
+    background-color: #222222;
+    color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+/* Button hover effect */
+button:hover {
+    background-color: #555555;
+}
+
