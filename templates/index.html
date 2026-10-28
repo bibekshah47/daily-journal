@@ -1,0 +1,35 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Daily Journal</title>
+</head>
+<body>
+
+    <h1>My Daily Journal</h1>
+    <p>A simple place to write my thoughts every day.</p>
+
+    <h2>Today's Journal</h2>
+
+    <p>Date: {{ today }}</p>
+
+    <form>
+        <label for="journal">What's on your mind?</label>
+        <br><br>
+
+        <textarea
+            id="journal"
+            name="journal"
+            rows="10"
+            cols="50"
+            placeholder="Start writing your thoughts here..."></textarea>
+
+        <br><br>
+
+        <button type="button">Save Entry</button>
+    </form>
+
+</body>
+</html>
