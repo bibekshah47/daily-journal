@@ -1,6 +1,7 @@
 
 from flask import Flask, render_template, request
-from datetime import date
+from datetime import date, datetime
+import sqlite3
 
 app = Flask(__name__)
 
@@ -13,8 +14,18 @@ def home():
         journal_entry = request.form.get("journal")
 
         if journal_entry and journal_entry.strip():
-            print("Journal Entry:", journal_entry)
-            message = "Your journal entry was submitted successfully!"
+            connection = sqlite3.connect("journal.db")
+            cursor = connection.cursor()
+
+            cursor.execute(
+                "INSERT INTO entries (content, created_at) VALUES (?, ?)",
+                (journal_entry, datetime.now().isoformat())
+            )
+
+            connection.commit()
+            connection.close()
+
+            message = "Your journal entry was saved successfully!"
         else:
             message = "Please write something before saving."
 
