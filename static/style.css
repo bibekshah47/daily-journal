@@ -122,3 +122,23 @@ button:hover {
 .edit-button {
     margin-bottom: 0;
 }
+
+
+.search-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 25px;
+}
+
+.search-form input {
+    flex: 1;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid #cccccc;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+.search-form button {
+    padding: 12px 20px;
+}

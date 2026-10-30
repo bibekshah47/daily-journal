@@ -10,6 +10,11 @@ def home():
     today = date.today()
     message = None
 
+
+    search_query = request.args.get("search", "")
+    print("Search keyword:", search_query)
+
+
     if request.method == "POST":
         journal_entry = request.form.get("journal")
 
@@ -34,8 +39,17 @@ def home():
     cursor = connection.cursor()
 
     
-    cursor.execute("SELECT * FROM entries ORDER BY id DESC")
+    
+    if search_query:
+        cursor.execute(
+            "SELECT * FROM entries WHERE content LIKE ? ORDER BY id DESC",
+            ("%" + search_query + "%",)
+        )
+    else:
+        cursor.execute("SELECT * FROM entries ORDER BY id DESC")
+
     rows = cursor.fetchall()
+
 
     entries = []
 
