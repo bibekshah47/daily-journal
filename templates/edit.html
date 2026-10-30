@@ -1,0 +1,39 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Journal Entry</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <h1>Edit Journal Entry</h1>
+    <p>Make changes to your journal entry below.</p>
+
+    <form action="{{ url_for('edit_entry', entry_id=entry[0]) }}"
+          method="POST">
+
+        <label for="journal">Your Journal Entry</label>
+
+        <br><br>
+
+        <textarea
+            id="journal"
+            name="journal"
+            rows="10">{{ entry[1] }}</textarea>
+
+        <br><br>
+
+        <button type="submit">Save Changes</button>
+    </form>
+
+    <p>
+        <a href="{{ url_for('home') }}">Cancel and go back</a>
+    </p>
+
+</body>
+</html>

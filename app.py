@@ -62,5 +62,39 @@ def delete_entry(entry_id):
     return redirect(url_for("home"))
 
 
+@app.route("/edit/<int:entry_id>", methods=["GET", "POST"])
+def edit_entry(entry_id):
+    connection = sqlite3.connect("journal.db")
+    cursor = connection.cursor()
+
+    if request.method == "POST":
+        updated_content = request.form.get("journal")
+
+        if updated_content and updated_content.strip():
+            cursor.execute(
+                "UPDATE entries SET content = ? WHERE id = ?",
+                (updated_content, entry_id)
+            )
+
+            connection.commit()
+            connection.close()
+
+            return redirect(url_for("home"))
+
+    cursor.execute(
+        "SELECT * FROM entries WHERE id = ?",
+        (entry_id,)
+    )
+
+    entry = cursor.fetchone()
+    connection.close()
+
+    if entry is None:
+        return "Journal entry not found", 404
+
+    return render_template("edit.html", entry=entry)
+
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
