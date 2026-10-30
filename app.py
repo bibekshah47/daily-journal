@@ -29,7 +29,21 @@ def home():
         else:
             message = "Please write something before saving."
 
-    return render_template("index.html", today=today, message=message)
+    
+    connection = sqlite3.connect("journal.db")
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT * FROM entries ORDER BY id DESC")
+    entries = cursor.fetchall()
+
+    connection.close()
+
+    return render_template(
+        "index.html",
+        today=today,
+        message=message,
+        entries=entries
+    )
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)

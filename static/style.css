@@ -52,3 +52,16 @@ button:hover {
     background-color: #555555;
 }
 
+
+.journal-entry {
+    background-color: white;
+    padding: 20px;
+    margin-bottom: 15px;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+}
+
+.journal-entry p {
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
