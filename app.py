@@ -79,8 +79,14 @@ def home():
     return render_template(
         "index.html",
         today=today,
+        entries=entries,
         message=message,
-        entries=entries
+
+        # Pass the search keyword to the HTML template
+        search_query=search_query,
+
+        # Remember the date selected in the date picker
+        filter_date=filter_date
     )
 
 
