@@ -65,3 +65,16 @@ button:hover {
     line-height: 1.6;
     overflow-wrap: anywhere;
 }
+
+
+.delete-button {
+    background-color: #c0392b;
+    color: white;
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 6px;
+}
+
+.delete-button:hover {
+    background-color: #922b21;
+}

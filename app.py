@@ -1,5 +1,5 @@
 
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for
 from datetime import date, datetime
 import sqlite3
 
@@ -44,6 +44,23 @@ def home():
         message=message,
         entries=entries
     )
+
+
+@app.route("/delete/<int:entry_id>", methods=["POST"])
+def delete_entry(entry_id):
+    connection = sqlite3.connect("journal.db")
+    cursor = connection.cursor()
+
+    cursor.execute(
+        "DELETE FROM entries WHERE id = ?",
+        (entry_id,)
+    )
+
+    connection.commit()
+    connection.close()
+
+    return redirect(url_for("home"))
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
