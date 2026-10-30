@@ -61,10 +61,27 @@ button:hover {
     border-radius: 8px;
 }
 
+
+.journal-entry {
+    background-color: #ffffff;
+    padding: 24px;
+    margin-bottom: 20px;
+    border: 1px solid #e8e5e0;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+}
+
 .journal-entry p {
-    line-height: 1.6;
+    line-height: 1.7;
     overflow-wrap: anywhere;
 }
+
+.journal-entry p:first-child {
+    color: #777777;
+    font-size: 13px;
+    margin-top: 0;
+}
+
 
 
 .delete-button {
@@ -93,4 +110,15 @@ button:hover {
 
 .edit-button:hover {
     background-color: #d5d5d5;
+}
+
+.entry-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.edit-button {
+    margin-bottom: 0;
 }

@@ -33,8 +33,21 @@ def home():
     connection = sqlite3.connect("journal.db")
     cursor = connection.cursor()
 
+    
     cursor.execute("SELECT * FROM entries ORDER BY id DESC")
-    entries = cursor.fetchall()
+    rows = cursor.fetchall()
+
+    entries = []
+
+    for entry in rows:
+        entry_id = entry[0]
+        content = entry[1]
+        created_at = datetime.fromisoformat(entry[2])
+
+        formatted_date = created_at.strftime("%B %d, %Y • %I:%M %p")
+
+        entries.append((entry_id, content, formatted_date))
+
 
     connection.close()
 
