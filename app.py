@@ -12,6 +12,10 @@ def home():
 
 
     search_query = request.args.get("search", "")
+
+    filter_date = request.args.get("filter_date", "")
+    print("Selected date:", filter_date)
+
     print("Search keyword:", search_query)
 
 
@@ -40,7 +44,13 @@ def home():
 
     
     
-    if search_query:
+    
+    if filter_date:
+        cursor.execute(
+            "SELECT * FROM entries WHERE date(created_at) = ? ORDER BY id DESC",
+            (filter_date,)
+        )
+    elif search_query:
         cursor.execute(
             "SELECT * FROM entries WHERE content LIKE ? ORDER BY id DESC",
             ("%" + search_query + "%",)
@@ -49,6 +59,7 @@ def home():
         cursor.execute("SELECT * FROM entries ORDER BY id DESC")
 
     rows = cursor.fetchall()
+
 
 
     entries = []

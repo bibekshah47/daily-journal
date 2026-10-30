@@ -55,6 +55,22 @@
     </form>
 
 
+    <form action="/" method="GET" class="date-filter-form">
+
+        <label for="filter-date">Filter by date:</label>
+
+        <input
+            type="date"
+            id="filter-date"
+            name="filter_date"
+        >
+
+        <button type="submit">Filter</button>
+
+    </form>
+
+
+
 
     
     {% for entry in entries %}
