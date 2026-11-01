@@ -33,6 +33,9 @@
             cols="50"
             placeholder="Start writing your thoughts here..."></textarea>
 
+        <!-- Display the live number of words typed -->
+        <p id="word-count">0 words</p>
+
         <br><br>
 
         <button type="submit">Save Entry</button>
@@ -132,6 +135,28 @@
 
 
 
+    <!-- JavaScript for counting words as the user types -->
+    <script>
+        // Find the journal textarea using its HTML ID
+        const journalInput = document.getElementById("journal");
+
+        // Find the paragraph where the word count will appear
+        const wordCount = document.getElementById("word-count");
+
+        // Listen for changes whenever the user types in the textarea
+        journalInput.addEventListener("input", function() {
+
+            // Get the typed text and remove extra spaces
+            const text = journalInput.value.trim();
+
+            // Count words separated by spaces, tabs, or line breaks
+            const count = text === "" ? 0 : text.split(/\s+/).length;
+
+            // Update the number of words displayed on the page
+            wordCount.textContent = count + (count === 1 ? " word" : " words");
+
+        });
+    </script>
 
 
 </body>
