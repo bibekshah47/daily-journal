@@ -42,43 +42,35 @@
     <h2>Previous Journal Entries</h2>
 
     
-    <form action="/" method="GET" class="search-form">
+    
+    <!-- Combined form for searching entries by keyword and date -->
+    <form action="/" method="GET" class="journal-filter-form">
 
-        
-        <!-- Search input that remembers the user's keyword -->
+        <!-- Search journal entries using a keyword -->
         <input
             type="text"
             name="search"
-            placeholder="Search your journal entries..."
+            placeholder="Search journal entries..."
             value="{{ search_query }}"
         >
 
-
-        <button type="submit">Search</button>
-
-    </form>
-
-
-    <form action="/" method="GET" class="date-filter-form">
-
-        <label for="filter-date">Filter by date:</label>
-
+        <!-- Filter entries by their creation date -->
         <input
             type="date"
-            id="filter-date"
             name="filter_date"
             value="{{ filter_date }}"
         >
 
-        <button type="submit">Filter</button>
+        <!-- Submit both filters together -->
+        <button type="submit">Apply Filters</button>
 
-
+        <!-- Return to the homepage without filters -->
         <a href="{{ url_for('home') }}" class="clear-button">
             Clear Filters
         </a>
 
-
     </form>
+
 
 
 
@@ -108,17 +100,28 @@
             </div>
         </div>
     
+        
     {% else %}
 
-        <!-- Display a helpful message when no entries are found -->
-        {% if filter_date %}
+        <!-- Show a message when both filters have no matching entries -->
+        {% if search_query and filter_date %}
+
+            <p>
+                No journal entries found containing
+                "{{ search_query }}" on {{ filter_date }}.
+            </p>
+
+        <!-- Show a message when only the date filter is active -->
+        {% elif filter_date %}
 
             <p>No journal entries found for {{ filter_date }}.</p>
 
+        <!-- Show a message when only the keyword search is active -->
         {% elif search_query %}
 
             <p>No journal entries found for "{{ search_query }}".</p>
 
+        <!-- Show a message when there are no journal entries at all -->
         {% else %}
 
             <p>No journal entries yet. Start writing your first journal!</p>
@@ -126,6 +129,7 @@
         {% endif %}
 
     {% endfor %}
+
 
 
 

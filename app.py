@@ -45,20 +45,40 @@ def home():
     
     
     
-    if filter_date:
+
+    # Check whether both a keyword and a date were provided
+    if search_query and filter_date:
+        cursor.execute(
+            """
+            SELECT * FROM entries
+            WHERE content LIKE ?
+            AND date(created_at) = ?
+            ORDER BY id DESC
+            """,
+            ("%" + search_query + "%", filter_date)
+        )
+
+    # Filter entries using only the selected date
+    elif filter_date:
         cursor.execute(
             "SELECT * FROM entries WHERE date(created_at) = ? ORDER BY id DESC",
             (filter_date,)
         )
+
+    # Filter entries using only the search keyword
     elif search_query:
         cursor.execute(
             "SELECT * FROM entries WHERE content LIKE ? ORDER BY id DESC",
             ("%" + search_query + "%",)
         )
+
+    # If no filters are provided, display all entries
     else:
         cursor.execute("SELECT * FROM entries ORDER BY id DESC")
 
+    # Retrieve the matching entries from SQLite
     rows = cursor.fetchall()
+
 
 
 

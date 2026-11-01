@@ -178,3 +178,33 @@ button:hover {
 .clear-button:hover {
     background-color: #dddddd;
 }
+
+
+/* Arrange all filter controls in a horizontal row */
+.journal-filter-form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 25px;
+}
+
+/* Style the keyword search and date inputs */
+.journal-filter-form input {
+    padding: 12px;
+    border: 1px solid #cccccc;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+/* Allow the keyword search box to take up extra space */
+.journal-filter-form input[type="text"] {
+    flex: 1;
+    min-width: 180px;
+}
+
+/* Style the Apply Filters button */
+.journal-filter-form button {
+    padding: 12px 20px;
+    cursor: pointer;
+}
