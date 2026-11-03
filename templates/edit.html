@@ -21,12 +21,18 @@
 
         <br><br>
 
+        
+        <!-- Textarea for editing an existing journal entry -->
         <textarea
-            id="journal"
+            id="edit-journal"
             name="journal"
             rows="10">{{ entry[1] }}</textarea>
 
+        <!-- Display the number of words in the entry -->
+        <p id="edit-word-count">0 words</p>
+
         <br><br>
+
 
         <button type="submit">Save Changes</button>
     </form>
@@ -34,6 +40,37 @@
     <p>
         <a href="{{ url_for('home') }}">Cancel and go back</a>
     </p>
+
+
+    <!-- JavaScript to count words on the Edit page -->
+    <script>
+        // Get the journal textarea
+        const editJournal = document.getElementById("edit-journal");
+
+        // Get the word counter paragraph
+        const editWordCount = document.getElementById("edit-word-count");
+
+        // Function to calculate the word count
+        function updateWordCount() {
+
+            // Get the text and remove extra spaces
+            const text = editJournal.value.trim();
+
+            // Count words separated by whitespace
+            const count = text === "" ? 0 : text.split(/\s+/).length;
+
+            // Display the updated word count
+            editWordCount.textContent =
+                count + (count === 1 ? " word" : " words");
+        }
+
+        // Count existing words when the page opens
+        updateWordCount();
+
+        // Update the count whenever the text changes
+        editJournal.addEventListener("input", updateWordCount);
+    </script>
+
 
 </body>
 </html>

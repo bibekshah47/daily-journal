@@ -208,3 +208,11 @@ button:hover {
     padding: 12px 20px;
     cursor: pointer;
 }
+
+/* Style the word counter on the Edit page */
+#edit-word-count {
+    font-size: 14px;
+    color: #777777;
+    text-align: right;
+    margin-top: 5px;
+}
