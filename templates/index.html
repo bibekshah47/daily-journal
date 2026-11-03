@@ -1,31 +1,65 @@
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+    <!-- Set the character encoding -->
     <meta charset="UTF-8">
+
+    <!-- Make the website responsive on different devices -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Website title -->
     <title>My Daily Journal</title>
-    
+
+    <!-- Connect the CSS stylesheet -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
 
+    <!-- Main heading -->
     <h1>My Daily Journal</h1>
     <p>A simple place to write my thoughts every day.</p>
 
+    <!-- Today's Journal Section -->
     <h2>Today's Journal</h2>
 
+    <!-- Display a message after submitting an entry -->
     {% if message %}
         <p>{{ message }}</p>
     {% endif %}
 
-
+    <!-- Display today's date -->
     <p>Date: {{ today }}</p>
 
+
+    <!-- Form for creating a new journal entry -->
     <form action="/" method="POST">
+
+        <!-- Mood dropdown section -->
+        <div class="mood-section">
+
+            <label for="mood">How are you feeling today?</label>
+
+            <!-- Select a mood before writing -->
+            <select id="mood" name="mood">
+                <option value="">Select your mood</option>
+                <option value="Happy">😊 Happy</option>
+                <option value="Excited">🤩 Excited</option>
+                <option value="Neutral">😐 Neutral</option>
+                <option value="Sad">😔 Sad</option>
+                <option value="Stressed">😫 Stressed</option>
+            </select>
+
+        </div>
+
+        <!-- Journal writing section -->
         <label for="journal">What's on your mind?</label>
+
         <br><br>
 
+        <!-- Textarea for writing the journal -->
         <textarea
             id="journal"
             name="journal"
@@ -38,14 +72,16 @@
 
         <br><br>
 
+        <!-- Submit the journal text and mood -->
         <button type="submit">Save Entry</button>
+
     </form>
 
 
+    <!-- Previous Journal Entries Section -->
     <h2>Previous Journal Entries</h2>
 
-    
-    
+
     <!-- Combined form for searching entries by keyword and date -->
     <form action="/" method="GET" class="journal-filter-form">
 
@@ -75,22 +111,58 @@
     </form>
 
 
-
-
-
-    
+    <!-- Loop through all matching journal entries -->
     {% for entry in entries %}
+
+        <!-- Individual journal entry card -->
         <div class="journal-entry">
-            <p><strong>Date:</strong> {{ entry[2] }}</p>
+
+            <!-- Display the date and time -->
+            <p>
+                <strong>Date:</strong> {{ entry[2] }}
+            </p>
+
+            <!-- Display mood only if one was saved -->
+            {% if entry[3] %}
+
+                <p>
+                    <strong>Mood:</strong>
+
+                    <!-- Display emoji based on the saved mood -->
+                    {% if entry[3] == "Happy" %}
+                        😊
+                    {% elif entry[3] == "Excited" %}
+                        🤩
+                    {% elif entry[3] == "Neutral" %}
+                        😐
+                    {% elif entry[3] == "Sad" %}
+                        😔
+                    {% elif entry[3] == "Stressed" %}
+                        😫
+                    {% endif %}
+
+                    <!-- Display the mood name -->
+                    {{ entry[3] }}
+                </p>
+
+            {% endif %}
+
+            <!-- Display the journal content -->
             <p>{{ entry[1] }}</p>
 
+
+            <!-- Edit and Delete buttons -->
             <div class="entry-actions">
 
-                <a href="{{ url_for('edit_entry', entry_id=entry[0]) }}"
-                    class="edit-button">
-                        Edit
+                <!-- Edit the selected journal entry -->
+                <a
+                    href="{{ url_for('edit_entry', entry_id=entry[0]) }}"
+                    class="edit-button"
+                >
+                    Edit
                 </a>
 
+                <!-- Delete the selected journal entry -->
                 <form
                     action="{{ url_for('delete_entry', entry_id=entry[0]) }}"
                     method="POST"
@@ -100,13 +172,14 @@
                         Delete
                     </button>
                 </form>
+
             </div>
+
         </div>
-    
-        
+
     {% else %}
 
-        <!-- Show a message when both filters have no matching entries -->
+        <!-- No results when both filters are applied -->
         {% if search_query and filter_date %}
 
             <p>
@@ -114,17 +187,17 @@
                 "{{ search_query }}" on {{ filter_date }}.
             </p>
 
-        <!-- Show a message when only the date filter is active -->
+        <!-- No entries found for the selected date -->
         {% elif filter_date %}
 
             <p>No journal entries found for {{ filter_date }}.</p>
 
-        <!-- Show a message when only the keyword search is active -->
+        <!-- No entries found for the search keyword -->
         {% elif search_query %}
 
             <p>No journal entries found for "{{ search_query }}".</p>
 
-        <!-- Show a message when there are no journal entries at all -->
+        <!-- No entries exist in the database -->
         {% else %}
 
             <p>No journal entries yet. Start writing your first journal!</p>
@@ -134,16 +207,16 @@
     {% endfor %}
 
 
-
     <!-- JavaScript for counting words as the user types -->
     <script>
+
         // Find the journal textarea using its HTML ID
         const journalInput = document.getElementById("journal");
 
         // Find the paragraph where the word count will appear
         const wordCount = document.getElementById("word-count");
 
-        // Listen for changes whenever the user types in the textarea
+        // Listen for changes whenever the user types
         journalInput.addEventListener("input", function() {
 
             // Get the typed text and remove extra spaces
@@ -152,12 +225,13 @@
             // Count words separated by spaces, tabs, or line breaks
             const count = text === "" ? 0 : text.split(/\s+/).length;
 
-            // Update the number of words displayed on the page
-            wordCount.textContent = count + (count === 1 ? " word" : " words");
+            // Update the word count displayed on the page
+            wordCount.textContent =
+                count + (count === 1 ? " word" : " words");
 
         });
-    </script>
 
+    </script>
 
 </body>
 </html>

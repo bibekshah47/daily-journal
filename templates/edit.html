@@ -1,76 +1,130 @@
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+    <!-- Character encoding -->
     <meta charset="UTF-8">
+
+    <!-- Responsive page layout -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Edit Journal Entry</title>
 
+    <!-- Connect the CSS stylesheet -->
     <link rel="stylesheet"
           href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
 
     <h1>Edit Journal Entry</h1>
-    <p>Make changes to your journal entry below.</p>
 
-    <form action="{{ url_for('edit_entry', entry_id=entry[0]) }}"
-          method="POST">
+    <p>Update your journal entry below.</p>
 
-        <label for="journal">Your Journal Entry</label>
+    <!-- Form for updating an existing entry -->
+    <form
+        action="{{ url_for('edit_entry', entry_id=entry[0]) }}"
+        method="POST"
+    >
+
+        <!-- Edit the mood -->
+        <div class="mood-section">
+
+            <label for="mood">How were you feeling?</label>
+
+            <select id="mood" name="mood">
+
+                <option value="">Select your mood</option>
+
+                <option value="Happy"
+                    {% if entry[3] == "Happy" %}selected{% endif %}>
+                    😊 Happy
+                </option>
+
+                <option value="Excited"
+                    {% if entry[3] == "Excited" %}selected{% endif %}>
+                    🤩 Excited
+                </option>
+
+                <option value="Neutral"
+                    {% if entry[3] == "Neutral" %}selected{% endif %}>
+                    😐 Neutral
+                </option>
+
+                <option value="Sad"
+                    {% if entry[3] == "Sad" %}selected{% endif %}>
+                    😔 Sad
+                </option>
+
+                <option value="Stressed"
+                    {% if entry[3] == "Stressed" %}selected{% endif %}>
+                    😫 Stressed
+                </option>
+
+            </select>
+
+        </div>
+
+        <!-- Edit the existing journal text -->
+        <label for="edit-journal">Your Journal Entry</label>
 
         <br><br>
 
-        
-        <!-- Textarea for editing an existing journal entry -->
         <textarea
             id="edit-journal"
             name="journal"
-            rows="10">{{ entry[1] }}</textarea>
+            rows="10"
+            cols="50">{{ entry[1] }}</textarea>
 
-        <!-- Display the number of words in the entry -->
+        <!-- Live word counter -->
         <p id="edit-word-count">0 words</p>
 
         <br><br>
 
-
+        <!-- Save updated journal entry -->
         <button type="submit">Save Changes</button>
+
+        <!-- Return to the homepage -->
+        <a href="{{ url_for('home') }}" class="clear-button">
+            Cancel
+        </a>
+
     </form>
 
-    <p>
-        <a href="{{ url_for('home') }}">Cancel and go back</a>
-    </p>
 
-
-    <!-- JavaScript to count words on the Edit page -->
+    <!-- JavaScript for counting words on the edit page -->
     <script>
-        // Get the journal textarea
-        const editJournal = document.getElementById("edit-journal");
 
-        // Get the word counter paragraph
-        const editWordCount = document.getElementById("edit-word-count");
+        // Find the edit textarea
+        const journalInput = document.getElementById("edit-journal");
 
-        // Function to calculate the word count
+        // Find the word count paragraph
+        const wordCount = document.getElementById("edit-word-count");
+
+        // Function for updating the word count
         function updateWordCount() {
 
-            // Get the text and remove extra spaces
-            const text = editJournal.value.trim();
+            // Get the text without extra spaces
+            const text = journalInput.value.trim();
 
-            // Count words separated by whitespace
-            const count = text === "" ? 0 : text.split(/\s+/).length;
+            // Calculate the number of words
+            const count = text === ""
+                ? 0
+                : text.split(/\s+/).length;
 
-            // Display the updated word count
-            editWordCount.textContent =
+            // Display the word count
+            wordCount.textContent =
                 count + (count === 1 ? " word" : " words");
         }
 
-        // Count existing words when the page opens
+        // Show the current word count when the page opens
         updateWordCount();
 
-        // Update the count whenever the text changes
-        editJournal.addEventListener("input", updateWordCount);
-    </script>
+        // Update the count whenever the user types
+        journalInput.addEventListener("input", updateWordCount);
 
+    </script>
 
 </body>
 </html>

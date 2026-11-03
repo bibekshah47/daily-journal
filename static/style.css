@@ -216,3 +216,26 @@ button:hover {
     text-align: right;
     margin-top: 5px;
 }
+
+
+/* Add spacing around the mood selection area */
+.mood-section {
+    margin-top: 15px;
+    margin-bottom: 20px;
+}
+
+/* Display the mood label above the dropdown */
+.mood-section label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+/* Style the mood dropdown */
+.mood-section select {
+    padding: 10px;
+    border: 1px solid #cccccc;
+    border-radius: 8px;
+    font-size: 16px;
+    background-color: white;
+}
