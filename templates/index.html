@@ -82,6 +82,43 @@
     <h2>Previous Journal Entries</h2>
 
 
+    <!-- Display the total number of journal entries -->
+    <p>
+        <strong>Total Journal Entries:</strong>
+        {{ total_entries }}
+    </p>
+
+
+    <!-- Display the number of entries written this month -->
+    <p>
+        <strong>Entries This Month:</strong>
+        {{ monthly_entries }}
+    </p>
+
+
+    <!-- Display the most frequently selected mood -->
+    <p>
+        <strong>Most Common Mood:</strong>
+
+        {% if most_common_mood == "Happy" %}
+            😊
+        {% elif most_common_mood == "Excited" %}
+            🤩
+        {% elif most_common_mood == "Neutral" %}
+            😐
+        {% elif most_common_mood == "Sad" %}
+            😔
+        {% elif most_common_mood == "Stressed" %}
+            😫
+        {% endif %}
+
+        {{ most_common_mood }}
+    </p>
+
+
+
+
+
     <!-- Combined form for searching entries by keyword and date -->
     <form action="/" method="GET" class="journal-filter-form">
 

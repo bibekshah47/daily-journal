@@ -108,6 +108,49 @@ def home():
     # Get all matching journal entries
     rows = cursor.fetchall()
 
+
+    # Count the total number of journal entries in the database
+    cursor.execute("SELECT COUNT(*) FROM entries")
+
+    # fetchone() returns one row, and [0] gets the count
+    total_entries = cursor.fetchone()[0]
+
+
+    # Get the current month in YYYY-MM format
+    current_month = datetime.now().strftime("%Y-%m")
+
+    # Count entries written during the current month
+    cursor.execute(
+        """
+        SELECT COUNT(*) FROM entries
+        WHERE substr(created_at, 1, 7) = ?
+        """,
+        (current_month,)
+    )
+
+    # Get the number returned by SQLite
+    monthly_entries = cursor.fetchone()[0]
+
+    # Find the mood that appears most frequently
+    cursor.execute(
+        """
+        SELECT mood, COUNT(*) AS mood_count
+        FROM entries
+        WHERE mood IS NOT NULL AND mood != ''
+        GROUP BY mood
+        ORDER BY mood_count DESC, mood ASC
+        LIMIT 1
+        """
+    )
+
+    # Retrieve the most common mood
+    mood_result = cursor.fetchone()
+
+    # Show a default message if no moods have been recorded
+    most_common_mood = mood_result[0] if mood_result else "No mood recorded"
+
+
+
     # Prepare entries for displaying on the website
     entries = []
 
@@ -139,7 +182,20 @@ def home():
         entries=entries,
         message=message,
         search_query=search_query,
-        filter_date=filter_date
+        filter_date=filter_date,
+
+         # Send the total number of entries to HTML
+        total_entries=total_entries,
+
+           # Send the monthly entry count to HTML
+        monthly_entries=monthly_entries,
+
+            # Send the most common mood to HTML
+        most_common_mood=most_common_mood,
+
+        
+    
+
     )
 
 
