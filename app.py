@@ -3,7 +3,7 @@
 from flask import Flask, render_template, request, redirect, url_for
 
 # Import date and time tools
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 # Import SQLite to store journal entries
 import sqlite3
@@ -150,6 +150,64 @@ def home():
     most_common_mood = mood_result[0] if mood_result else "No mood recorded"
 
 
+    # Get all unique dates when journal entries were written
+    cursor.execute(
+        """
+        SELECT DISTINCT date(created_at)
+        FROM entries
+        ORDER BY date(created_at) DESC
+        """
+    )
+
+    # Retrieve the dates from SQLite
+    journal_dates = cursor.fetchall()
+
+
+    # Convert SQLite results into Python date objects
+    dates = [
+        date.fromisoformat(row[0])
+        for row in journal_dates
+        if row[0] is not None
+    ]
+
+    # Start the streak at zero
+    current_streak = 0
+
+    # Get today's date
+    today_date = date.today()
+
+    # A streak can continue from yesterday if
+    # today's journal entry has not been written yet
+    if today_date in dates:
+        check_date = today_date
+    else:
+        check_date = today_date - timedelta(days=1)
+
+    # Count consecutive journaling days
+    for journal_date in dates:
+
+        # Check whether the entry matches the expected date
+        if journal_date == check_date:
+
+            # Increase the streak by one day
+            current_streak += 1
+
+            # Move backward by one day
+            check_date -= timedelta(days=1)
+
+        # Stop when a day is missing
+        else:
+            break
+
+    # Display the calculated streak in the terminal
+    print("Current journaling streak:", current_streak)
+
+
+    # Print the dates to understand the result
+    print("Journal dates:", journal_dates)
+
+
+
 
     # Prepare entries for displaying on the website
     entries = []
@@ -183,15 +241,11 @@ def home():
         message=message,
         search_query=search_query,
         filter_date=filter_date,
+        total_entries=total_entries, # Send the total number of entries to HTML
+        monthly_entries=monthly_entries,             # Send the monthly entry count to HTML
+        most_common_mood=most_common_mood, # Send the most common mood to HTML
+        current_streak=current_streak,
 
-         # Send the total number of entries to HTML
-        total_entries=total_entries,
-
-           # Send the monthly entry count to HTML
-        monthly_entries=monthly_entries,
-
-            # Send the most common mood to HTML
-        most_common_mood=most_common_mood,
 
         
     

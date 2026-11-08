@@ -116,6 +116,20 @@
     </p>
 
 
+    <!-- Display the current journaling streak -->
+    <p>
+        <strong>Current Journaling Streak 🔥 :</strong>
+        {{ current_streak }}
+
+        {% if current_streak == 1 %}
+            day
+        {% else %}
+            days
+        {% endif %}
+    </p>
+
+
+
 
 
 
