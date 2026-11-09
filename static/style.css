@@ -239,3 +239,117 @@ button:hover {
     font-size: 16px;
     background-color: white;
 }
+
+
+/* Main layout for the journal application */
+.container {
+    max-width: 900px;      /* Maximum width of the content */
+    margin: 0 auto;        /* Center the content horizontally */
+    padding: 30px 20px;    /* Add space inside the container */
+}
+
+
+/* Space around the statistics dashboard */
+.statistics-section {
+    margin: 30px 0;
+}
+
+/* Display statistics in two columns */
+.statistics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+/* Design each statistics card */
+.stat-card {
+    background-color: #f8f9fa;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+/* Style the card labels */
+.stat-card p {
+    color: #6b7280;
+    font-size: 14px;
+    margin: 0 0 10px;
+}
+
+/* Style the card values */
+.stat-card h3 {
+    color: #111827;
+    font-size: 24px;
+    margin: 0;
+}
+
+/* Use one column on smaller screens */
+@media (max-width: 600px) {
+    .statistics-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* Card around the journal writing form */
+.journal-form-card {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 30px;
+    margin: 30px 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+/* Journal section heading */
+.journal-form-card h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+/* Make the journal textarea fit the card */
+.journal-form-card textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    padding: 15px;
+    font-size: 16px;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+/* Highlight textarea when writing */
+.journal-form-card textarea:focus {
+    outline: none;
+    border-color: #2563eb;
+}
+
+/* Style the mood dropdown */
+.journal-form-card select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    font-size: 16px;
+    margin-top: 10px;
+    margin-bottom: 20px;
+    background-color: #ffffff;
+}
+
+/* Style the Save Entry button */
+.journal-form-card button[type="submit"] {
+    background-color: #2563eb;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 24px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+/* Button hover effect */
+.journal-form-card button[type="submit"]:hover {
+    background-color: #1d4ed8;
+}

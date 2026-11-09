@@ -18,271 +18,295 @@
 
 <body>
 
-    <!-- Main heading -->
-    <h1>My Daily Journal</h1>
-    <p>A simple place to write my thoughts every day.</p>
-
-    <!-- Today's Journal Section -->
-    <h2>Today's Journal</h2>
-
-    <!-- Display a message after submitting an entry -->
-    {% if message %}
-        <p>{{ message }}</p>
-    {% endif %}
-
-    <!-- Display today's date -->
-    <p>Date: {{ today }}</p>
+    <!-- Main container for the journal application -->
+    <div class="container">
 
 
-    <!-- Form for creating a new journal entry -->
-    <form action="/" method="POST">
+        <!-- Main heading -->
+        <h1>My Daily Journal</h1>
+        <p>A simple place to write my thoughts every day.</p>
 
-        <!-- Mood dropdown section -->
-        <div class="mood-section">
+        <!-- Card containing today's journal form -->
+        <div class="journal-form-card">
 
-            <label for="mood">How are you feeling today?</label>
+            <!-- Today's Journal Section -->
+            <h2>Today's Journal</h2>
 
-            <!-- Select a mood before writing -->
-            <select id="mood" name="mood">
-                <option value="">Select your mood</option>
-                <option value="Happy">😊 Happy</option>
-                <option value="Excited">🤩 Excited</option>
-                <option value="Neutral">😐 Neutral</option>
-                <option value="Sad">😔 Sad</option>
-                <option value="Stressed">😫 Stressed</option>
-            </select>
-
-        </div>
-
-        <!-- Journal writing section -->
-        <label for="journal">What's on your mind?</label>
-
-        <br><br>
-
-        <!-- Textarea for writing the journal -->
-        <textarea
-            id="journal"
-            name="journal"
-            rows="10"
-            cols="50"
-            placeholder="Start writing your thoughts here..."></textarea>
-
-        <!-- Display the live number of words typed -->
-        <p id="word-count">0 words</p>
-
-        <br><br>
-
-        <!-- Submit the journal text and mood -->
-        <button type="submit">Save Entry</button>
-
-    </form>
-
-
-    <!-- Previous Journal Entries Section -->
-    <h2>Previous Journal Entries</h2>
-
-
-    <!-- Display the total number of journal entries -->
-    <p>
-        <strong>Total Journal Entries:</strong>
-        {{ total_entries }}
-    </p>
-
-
-    <!-- Display the number of entries written this month -->
-    <p>
-        <strong>Entries This Month:</strong>
-        {{ monthly_entries }}
-    </p>
-
-
-    <!-- Display the most frequently selected mood -->
-    <p>
-        <strong>Most Common Mood:</strong>
-
-        {% if most_common_mood == "Happy" %}
-            😊
-        {% elif most_common_mood == "Excited" %}
-            🤩
-        {% elif most_common_mood == "Neutral" %}
-            😐
-        {% elif most_common_mood == "Sad" %}
-            😔
-        {% elif most_common_mood == "Stressed" %}
-            😫
+        <!-- Display a message after submitting an entry -->
+        {% if message %}
+            <p>{{ message }}</p>
         {% endif %}
 
-        {{ most_common_mood }}
-    </p>
+        <!-- Display today's date -->
+        <p>Date: {{ today }}</p>
 
 
-    <!-- Display the current journaling streak -->
-    <p>
-        <strong>Current Journaling Streak 🔥 :</strong>
-        {{ current_streak }}
+        <!-- Form for creating a new journal entry -->
+        <form action="/" method="POST">
 
-        {% if current_streak == 1 %}
-            day
-        {% else %}
-            days
-        {% endif %}
-    </p>
+            <!-- Mood dropdown section -->
+            <div class="mood-section">
 
+                <label for="mood">How are you feeling today?</label>
 
-
-
-
-
-    <!-- Combined form for searching entries by keyword and date -->
-    <form action="/" method="GET" class="journal-filter-form">
-
-        <!-- Search journal entries using a keyword -->
-        <input
-            type="text"
-            name="search"
-            placeholder="Search journal entries..."
-            value="{{ search_query }}"
-        >
-
-        <!-- Filter entries by their creation date -->
-        <input
-            type="date"
-            name="filter_date"
-            value="{{ filter_date }}"
-        >
-
-        <!-- Submit both filters together -->
-        <button type="submit">Apply Filters</button>
-
-        <!-- Return to the homepage without filters -->
-        <a href="{{ url_for('home') }}" class="clear-button">
-            Clear Filters
-        </a>
-
-    </form>
-
-
-    <!-- Loop through all matching journal entries -->
-    {% for entry in entries %}
-
-        <!-- Individual journal entry card -->
-        <div class="journal-entry">
-
-            <!-- Display the date and time -->
-            <p>
-                <strong>Date:</strong> {{ entry[2] }}
-            </p>
-
-            <!-- Display mood only if one was saved -->
-            {% if entry[3] %}
-
-                <p>
-                    <strong>Mood:</strong>
-
-                    <!-- Display emoji based on the saved mood -->
-                    {% if entry[3] == "Happy" %}
-                        😊
-                    {% elif entry[3] == "Excited" %}
-                        🤩
-                    {% elif entry[3] == "Neutral" %}
-                        😐
-                    {% elif entry[3] == "Sad" %}
-                        😔
-                    {% elif entry[3] == "Stressed" %}
-                        😫
-                    {% endif %}
-
-                    <!-- Display the mood name -->
-                    {{ entry[3] }}
-                </p>
-
-            {% endif %}
-
-            <!-- Display the journal content -->
-            <p>{{ entry[1] }}</p>
-
-
-            <!-- Edit and Delete buttons -->
-            <div class="entry-actions">
-
-                <!-- Edit the selected journal entry -->
-                <a
-                    href="{{ url_for('edit_entry', entry_id=entry[0]) }}"
-                    class="edit-button"
-                >
-                    Edit
-                </a>
-
-                <!-- Delete the selected journal entry -->
-                <form
-                    action="{{ url_for('delete_entry', entry_id=entry[0]) }}"
-                    method="POST"
-                    onsubmit="return confirm('Are you sure you want to delete this entry?');"
-                >
-                    <button type="submit" class="delete-button">
-                        Delete
-                    </button>
-                </form>
+                <!-- Select a mood before writing -->
+                <select id="mood" name="mood">
+                    <option value="">Select your mood</option>
+                    <option value="Happy">😊 Happy</option>
+                    <option value="Excited">🤩 Excited</option>
+                    <option value="Neutral">😐 Neutral</option>
+                    <option value="Sad">😔 Sad</option>
+                    <option value="Stressed">😫 Stressed</option>
+                </select>
 
             </div>
 
+            <!-- Journal writing section -->
+            <label for="journal">What's on your mind?</label>
+
+            <br><br>
+
+            <!-- Textarea for writing the journal -->
+            <textarea
+                id="journal"
+                name="journal"
+                rows="10"
+                cols="50"
+                placeholder="Start writing your thoughts here..."></textarea>
+
+            <!-- Display the live number of words typed -->
+            <p id="word-count">0 words</p>
+
+            <br><br>
+
+            <!-- Submit the journal text and mood -->
+            <button type="submit">Save Entry</button>
+
+        </form>
         </div>
 
-    {% else %}
 
-        <!-- No results when both filters are applied -->
-        {% if search_query and filter_date %}
+                
+        <!-- Previous Journal Entries Section -->
+        <h2>Previous Journal Entries</h2>
 
-            <p>
-                No journal entries found containing
-                "{{ search_query }}" on {{ filter_date }}.
-            </p>
+        <!-- Journal Statistics Dashboard -->
+        <section class="statistics-section">
 
-        <!-- No entries found for the selected date -->
-        {% elif filter_date %}
+            <h2>Journal Statistics</h2>
 
-            <p>No journal entries found for {{ filter_date }}.</p>
+            <!-- Container for all four statistics cards -->
+            <div class="statistics-grid">
 
-        <!-- No entries found for the search keyword -->
-        {% elif search_query %}
+                <!-- Card 1: Total Journal Entries -->
+                <div class="stat-card">
+                    <p>Total Entries</p>
+                    <h3>{{ total_entries }}</h3>
+                </div>
 
-            <p>No journal entries found for "{{ search_query }}".</p>
+                <!-- Card 2: Entries This Month -->
+                <div class="stat-card">
+                    <p>Entries This Month</p>
+                    <h3>{{ monthly_entries }}</h3>
+                </div>
 
-        <!-- No entries exist in the database -->
+                <!-- Card 3: Most Common Mood -->
+                <div class="stat-card">
+                    <p>Most Common Mood</p>
+
+                    <h3>
+                        {% if most_common_mood == "Happy" %}
+                            😊
+                        {% elif most_common_mood == "Excited" %}
+                            🤩
+                        {% elif most_common_mood == "Neutral" %}
+                            😐
+                        {% elif most_common_mood == "Sad" %}
+                            😔
+                        {% elif most_common_mood == "Stressed" %}
+                            😫
+                        {% endif %}
+
+                        {{ most_common_mood }}
+                    </h3>
+                </div>
+
+                <!-- Card 4: Current Journaling Streak -->
+                <div class="stat-card">
+                    <p>Current Journaling Streak</p>
+
+                    <h3>
+                        🔥 {{ current_streak }}
+
+                        {% if current_streak == 1 %}
+                            day
+                        {% else %}
+                            days
+                        {% endif %}
+                    </h3>
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- Keep your existing search and date filter form below -->
+
+                
+
+
+
+        <!-- Combined form for searching entries by keyword and date -->
+        <form action="/" method="GET" class="journal-filter-form">
+
+            <!-- Search journal entries using a keyword -->
+            <input
+                type="text"
+                name="search"
+                placeholder="Search journal entries..."
+                value="{{ search_query }}"
+            >
+
+            <!-- Filter entries by their creation date -->
+            <input
+                type="date"
+                name="filter_date"
+                value="{{ filter_date }}"
+            >
+
+            <!-- Submit both filters together -->
+            <button type="submit">Apply Filters</button>
+
+            <!-- Return to the homepage without filters -->
+            <a href="{{ url_for('home') }}" class="clear-button">
+                Clear Filters
+            </a>
+
+        </form>
+
+
+        <!-- Loop through all matching journal entries -->
+        {% for entry in entries %}
+
+            <!-- Individual journal entry card -->
+            <div class="journal-entry">
+
+                <!-- Display the date and time -->
+                <p>
+                    <strong>Date:</strong> {{ entry[2] }}
+                </p>
+
+                <!-- Display mood only if one was saved -->
+                {% if entry[3] %}
+
+                    <p>
+                        <strong>Mood:</strong>
+
+                        <!-- Display emoji based on the saved mood -->
+                        {% if entry[3] == "Happy" %}
+                            😊
+                        {% elif entry[3] == "Excited" %}
+                            🤩
+                        {% elif entry[3] == "Neutral" %}
+                            😐
+                        {% elif entry[3] == "Sad" %}
+                            😔
+                        {% elif entry[3] == "Stressed" %}
+                            😫
+                        {% endif %}
+
+                        <!-- Display the mood name -->
+                        {{ entry[3] }}
+                    </p>
+
+                {% endif %}
+
+                <!-- Display the journal content -->
+                <p>{{ entry[1] }}</p>
+
+
+                <!-- Edit and Delete buttons -->
+                <div class="entry-actions">
+
+                    <!-- Edit the selected journal entry -->
+                    <a
+                        href="{{ url_for('edit_entry', entry_id=entry[0]) }}"
+                        class="edit-button"
+                    >
+                        Edit
+                    </a>
+
+                    <!-- Delete the selected journal entry -->
+                    <form
+                        action="{{ url_for('delete_entry', entry_id=entry[0]) }}"
+                        method="POST"
+                        onsubmit="return confirm('Are you sure you want to delete this entry?');"
+                    >
+                        <button type="submit" class="delete-button">
+                            Delete
+                        </button>
+                    </form>
+
+                </div>
+
+            </div>
+
         {% else %}
 
-            <p>No journal entries yet. Start writing your first journal!</p>
+            <!-- No results when both filters are applied -->
+            {% if search_query and filter_date %}
 
-        {% endif %}
+                <p>
+                    No journal entries found containing
+                    "{{ search_query }}" on {{ filter_date }}.
+                </p>
 
-    {% endfor %}
+            <!-- No entries found for the selected date -->
+            {% elif filter_date %}
+
+                <p>No journal entries found for {{ filter_date }}.</p>
+
+            <!-- No entries found for the search keyword -->
+            {% elif search_query %}
+
+                <p>No journal entries found for "{{ search_query }}".</p>
+
+            <!-- No entries exist in the database -->
+            {% else %}
+
+                <p>No journal entries yet. Start writing your first journal!</p>
+
+            {% endif %}
+
+        {% endfor %}
 
 
-    <!-- JavaScript for counting words as the user types -->
-    <script>
+        <!-- JavaScript for counting words as the user types -->
+        <script>
 
-        // Find the journal textarea using its HTML ID
-        const journalInput = document.getElementById("journal");
+            // Find the journal textarea using its HTML ID
+            const journalInput = document.getElementById("journal");
 
-        // Find the paragraph where the word count will appear
-        const wordCount = document.getElementById("word-count");
+            // Find the paragraph where the word count will appear
+            const wordCount = document.getElementById("word-count");
 
-        // Listen for changes whenever the user types
-        journalInput.addEventListener("input", function() {
+            // Listen for changes whenever the user types
+            journalInput.addEventListener("input", function() {
 
-            // Get the typed text and remove extra spaces
-            const text = journalInput.value.trim();
+                // Get the typed text and remove extra spaces
+                const text = journalInput.value.trim();
 
-            // Count words separated by spaces, tabs, or line breaks
-            const count = text === "" ? 0 : text.split(/\s+/).length;
+                // Count words separated by spaces, tabs, or line breaks
+                const count = text === "" ? 0 : text.split(/\s+/).length;
 
-            // Update the word count displayed on the page
-            wordCount.textContent =
-                count + (count === 1 ? " word" : " words");
+                // Update the word count displayed on the page
+                wordCount.textContent =
+                    count + (count === 1 ? " word" : " words");
 
-        });
+            });
 
-    </script>
+        </script>
+    </div>
 
 </body>
 </html>
