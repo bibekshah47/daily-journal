@@ -181,13 +181,23 @@ button:hover {
 
 
 /* Arrange all filter controls in a horizontal row */
+
+/* Arrange all filter controls in a horizontal row */
 .journal-filter-form {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 10px;
     margin-bottom: 25px;
 }
+
+/* Allow filters to wrap on smaller screens */
+@media (max-width: 700px) {
+    .journal-filter-form {
+        flex-wrap: wrap;
+    }
+}
+
 
 /* Style the keyword search and date inputs */
 .journal-filter-form input {
@@ -352,4 +362,109 @@ button:hover {
 /* Button hover effect */
 .journal-form-card button[type="submit"]:hover {
     background-color: #1d4ed8;
+}
+
+
+/* Card around today's journal form */
+.journal-form-card {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 30px;
+    margin: 30px 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+/* Style the heading inside the card */
+.journal-form-card h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+/* Style the journal writing area */
+.journal-form-card textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    padding: 15px;
+    font-size: 16px;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+/* Change the border color when writing */
+.journal-form-card textarea:focus {
+    outline: none;
+    border-color: #2563eb;
+}
+
+/* Style the mood dropdown */
+.journal-form-card select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    font-size: 16px;
+    margin-top: 10px;
+    margin-bottom: 20px;
+    background-color: #ffffff;
+}
+
+/* Style the Save Entry button */
+.journal-form-card button[type="submit"] {
+    background-color: #2563eb;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 24px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+/* Change button color when hovering */
+.journal-form-card button[type="submit"]:hover {
+    background-color: #1d4ed8;
+}
+
+
+/* Design each saved journal entry card */
+.journal-entry {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+}
+
+/* Improve spacing for the date and mood */
+.journal-entry p {
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+/* Make journal content easier to read */
+.entry-content {
+    font-size: 16px;
+    line-height: 1.8;
+    color: #374151;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+/* Position Edit and Delete buttons side by side */
+.entry-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+/* Remove extra spacing from the Delete form */
+.entry-actions form {
+    margin: 0;
 }
