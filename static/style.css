@@ -468,3 +468,146 @@ button:hover {
 .entry-actions form {
     margin: 0;
 }
+
+
+/* Main calendar container */
+.calendar-section {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 25px;
+    margin: 30px 0;
+}
+
+/* Calendar month heading */
+.calendar-section h3 {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+/* Arrange calendar days into seven columns */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+}
+
+/* Weekday headings */
+.calendar-weekday {
+    text-align: center;
+    font-weight: bold;
+    font-size: 13px;
+    padding: 10px 0;
+}
+
+
+/* Individual clickable calendar day */
+.calendar-day {
+    display: block;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    min-height: 55px;
+    padding: 8px;
+    text-align: center;
+    font-size: 14px;
+    box-sizing: border-box;
+
+    /* Remove the default link underline */
+    text-decoration: none;
+
+    /* Set the text color */
+    color: #374151;
+
+    /* Show a pointer when hovering */
+    cursor: pointer;
+}
+
+/* Highlight a calendar date when hovering */
+.calendar-day:hover {
+    background-color: #e5e7eb;
+}
+
+/* Keep journal dates green when hovering */
+.calendar-day.has-entry:hover {
+    background-color: #bbf7d0;
+}
+
+
+/* Highlight dates with journal entries */
+.calendar-day.has-entry {
+    background-color: #dcfce7;
+    color: #166534;
+    font-weight: bold;
+}
+
+/* Fade dates outside the current month */
+.calendar-day.other-month {
+    opacity: 0.35;
+}
+
+/* Display the checkmark */
+.calendar-check {
+    display: block;
+    margin-top: 4px;
+    font-size: 14px;
+}
+
+/* Calendar legend */
+.calendar-legend {
+    color: #6b7280;
+    font-size: 13px;
+    margin-top: 15px;
+}
+
+/* Make calendar cells smaller on mobile */
+@media (max-width: 600px) {
+    .calendar-section {
+        padding: 12px;
+    }
+
+    .calendar-grid {
+        gap: 3px;
+    }
+
+    .calendar-day {
+        min-height: 42px;
+        padding: 5px 2px;
+        font-size: 12px;
+    }
+}
+
+
+/* Arrange month navigation horizontally */
+.calendar-navigation {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 25px;
+    margin-bottom: 20px;
+}
+
+/* Remove extra spacing around the month heading */
+.calendar-navigation h3 {
+    margin: 0;
+    text-align: center;
+}
+
+/* Style the previous and next month buttons */
+.calendar-nav-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+    color: #374151;
+    text-decoration: none;
+    font-size: 18px;
+}
+
+/* Highlight navigation buttons on hover */
+.calendar-nav-button:hover {
+    background-color: #e5e7eb;
+}

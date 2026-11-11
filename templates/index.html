@@ -87,11 +87,101 @@
 
 
                 
+                
+    
+
+                
+        <!-- Journal Calendar Section -->
+        <section class="calendar-section">
+
+            <h2>Journal Calendar</h2>
+
+            <!-- Calendar month navigation -->
+            <div class="calendar-navigation">
+
+                <!-- Go to the previous month -->
+                <a href="{{ url_for('home', month=previous_month) }}"
+                class="calendar-nav-button"
+                aria-label="Previous month">
+                    &#10094;
+                </a>
+
+                <!-- Display the selected month and year -->
+                <h3>
+                    {{ displayed_month.strftime("%B %Y") }}
+                </h3>
+
+                <!-- Go to the next month -->
+                <a href="{{ url_for('home', month=next_month) }}"
+                class="calendar-nav-button"
+                aria-label="Next month">
+                    &#10095;
+                </a>
+
+            </div>
+
+            <!-- Calendar grid -->
+            <div class="calendar-grid">
+
+
+                <!-- Weekday headings -->
+                <div class="calendar-weekday">Sun</div>
+                <div class="calendar-weekday">Mon</div>
+                <div class="calendar-weekday">Tue</div>
+                <div class="calendar-weekday">Wed</div>
+                <div class="calendar-weekday">Thu</div>
+                <div class="calendar-weekday">Fri</div>
+                <div class="calendar-weekday">Sat</div>
+
+                <!-- Loop through each week -->
+                {% for week in calendar_weeks %}
+
+                    <!-- Loop through each day in the week -->
+                    {% for day in week %}
+
+                        
+                        <!-- Check if this date has a journal entry -->
+                        <a
+                            href="{{ url_for('home', filter_date=day.isoformat()) }}"
+                            class="calendar-day
+                                {% if day.isoformat() in calendar_entry_dates %}
+                                    has-entry
+                                {% endif %}
+                                {% if day.month != current_month %}
+                                    other-month
+                                {% endif %}
+                            "
+                        >
+
+                            <!-- Display the day number -->
+                            {{ day.day }}
+
+                            <!-- Show a checkmark for journal days -->
+                            {% if day.isoformat() in calendar_entry_dates %}
+                                <span class="calendar-check">✓</span>
+                            {% endif %}
+
+                        </a>
+
+
+                    {% endfor %}
+
+                {% endfor %}
+
+            </div>
+
+            <p class="calendar-legend">
+                ✓ Green dates indicate journal entries.
+            </p>
+
+        </section>
+
         <!-- Previous Journal Entries Section -->
         <h2>Previous Journal Entries</h2>
 
         <!-- Journal Statistics Dashboard -->
         <section class="statistics-section">
+
 
             <h2>Journal Statistics</h2>
 

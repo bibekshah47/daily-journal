@@ -7,6 +7,8 @@ from datetime import date, datetime, timedelta
 
 # Import SQLite to store journal entries
 import sqlite3
+import calendar
+
 
 # Create the Flask application
 app = Flask(__name__)
@@ -21,6 +23,63 @@ def home():
 
     # Message shown after submitting a journal entry
     message = None
+
+
+    today = date.today()
+    message = None
+
+        
+    # Get the selected month from the website URL
+    # Example: /?month=2026-10
+    selected_month = request.args.get("month", "")
+
+    # Use the current month if no month was selected
+    if selected_month:
+        try:
+            # Convert "2026-10" into a Python date
+            displayed_month = datetime.strptime(
+                selected_month, "%Y-%m"
+            ).date()
+
+        # Handle an invalid month in the URL
+        except ValueError:
+            displayed_month = today.replace(day=1)
+    else:
+        displayed_month = today.replace(day=1)
+
+    # Get the year and month being displayed
+    current_year = displayed_month.year
+    current_month = displayed_month.month
+
+    # Create a calendar starting on Sunday
+    cal = calendar.Calendar(firstweekday=6)
+
+    # Generate the calendar for the selected month
+    calendar_weeks = cal.monthdatescalendar(
+        current_year,
+        current_month
+    )
+
+    # Calculate the previous month
+    previous_month = (
+        displayed_month.replace(day=1) - timedelta(days=1)
+    ).strftime("%Y-%m")
+
+    # Calculate the next month
+    if current_month == 12:
+        next_month = f"{current_year + 1}-01"
+    else:
+        next_month = f"{current_year}-{current_month + 1:02d}"
+
+    # Print values to test
+    print("Displayed month:", displayed_month)
+    print("Previous month:", previous_month)
+    print("Next month:", next_month)
+
+
+    # Print the calendar weeks to test the result
+    print("Calendar weeks:", calendar_weeks)
+
 
     # Get search and date filter values from the URL
     search_query = request.args.get("search", "")
@@ -163,6 +222,20 @@ def home():
     journal_dates = cursor.fetchall()
 
 
+    # Convert journal dates into a set of date strings
+    # Example: {"2026-11-01", "2026-11-06"}
+
+    calendar_entry_dates = {
+        row[0]
+        for row in journal_dates
+        if row[0] is not None
+    }
+
+    # Print the dates to verify the result
+    print("Calendar entry dates:", calendar_entry_dates)
+
+
+
     # Convert SQLite results into Python date objects
     dates = [
         date.fromisoformat(row[0])
@@ -246,9 +319,16 @@ def home():
         most_common_mood=most_common_mood, # Send the most common mood to HTML
         current_streak=current_streak,
 
+    # Send calendar information to index.html
+        calendar_weeks=calendar_weeks,
+        calendar_entry_dates=calendar_entry_dates,
+        current_month=current_month,
 
-        
-    
+            # Calendar navigation information
+        displayed_month=displayed_month,
+        previous_month=previous_month,
+        next_month=next_month,
+
 
     )
 
