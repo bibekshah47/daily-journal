@@ -1,12 +1,19 @@
 
+
+/* Main page styling */
 body {
     background-color: #f8f7f4;
     font-family: Arial, sans-serif;
     color: #333333;
-    max-width: 700px;
-    margin: 60px auto;
-    padding: 20px;
+
+    /* Allow the page to use the full browser width */
+    width: 100%;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
+
 
 h1 {
     font-size: 36px;
@@ -696,22 +703,22 @@ button:hover {
     padding-top: 20px;
 }
 
-/* Move the journal content to the right */
+
+/* Main content area beside the sidebar */
 body > .container {
     margin-left: 250px;
-    margin-right: auto;
+    margin-right: 0;
+
+    /* Use the available space beside the sidebar */
     width: calc(100% - 250px);
     max-width: none;
+
+    /* Center the journal content */
+    padding: 40px max(30px, calc((100% - 900px) / 2));
+
     box-sizing: border-box;
-    padding: 40px 30px;
 }
 
-/* Keep the journal itself centered */
-body > .container > * {
-    max-width: 900px;
-    margin-left: auto;
-    margin-right: auto;
-}
 
 /* Responsive layout for mobile devices */
 @media (max-width: 768px) {
