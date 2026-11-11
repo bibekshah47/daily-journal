@@ -18,6 +18,60 @@
 
 <body>
 
+
+<body>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+
+        <!-- Sidebar Header -->
+        <div class="sidebar-header">
+            <h2>📖 My Journal</h2>
+        </div>
+
+        <!-- Main Navigation -->
+        <nav class="sidebar-nav">
+
+            <a href="/" class="sidebar-link">
+                🏠 Home
+            </a>
+
+            <a href="#journal-form" class="sidebar-link">
+                ✍️ Write Journal
+            </a>
+
+            <a href="#journal-calendar" class="sidebar-link">
+                📅 Calendar
+            </a>
+
+            <a href="#journal-insights" class="sidebar-link">
+                📊 Insights
+            </a>
+
+        </nav>
+
+        <!-- Journal Archive -->
+        <div class="sidebar-archive">
+
+            <h3>Journal Archive</h3>
+
+            <!-- We will make these expandable later -->
+            <div class="archive-year">📁 2026</div>
+            <div class="archive-year">📁 2025</div>
+
+        </div>
+
+        <!-- Sidebar Footer -->
+        <div class="sidebar-footer">
+            <a href="#" class="sidebar-link">
+                ⚙️ Settings
+            </a>
+        </div>
+
+    </aside>
+
+    
+
     <!-- Main container for the journal application -->
     <div class="container">
 
@@ -27,7 +81,7 @@
         <p>A simple place to write my thoughts every day.</p>
 
         <!-- Card containing today's journal form -->
-        <div class="journal-form-card">
+        <div class="journal-form-card" id="journal-form">
 
             <!-- Today's Journal Section -->
             <h2>Today's Journal</h2>
@@ -92,7 +146,7 @@
 
                 
         <!-- Journal Calendar Section -->
-        <section class="calendar-section">
+        <section class="calendar-section" id="journal-calendar">
 
             <h2>Journal Calendar</h2>
 
@@ -180,7 +234,7 @@
         <h2>Previous Journal Entries</h2>
 
         <!-- Journal Statistics Dashboard -->
-        <section class="statistics-section">
+        <section class="statistics-section" id="journal-insights">
 
 
             <h2>Journal Statistics</h2>
