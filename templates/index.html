@@ -142,7 +142,7 @@
                         
                         <!-- Check if this date has a journal entry -->
                         <a
-                            href="{{ url_for('home', filter_date=day.isoformat()) }}"
+                            href="{{ url_for('home', month=day.strftime('%Y-%m'), filter_date=day.isoformat()) }}"
                             class="calendar-day
                                 {% if day.isoformat() in calendar_entry_dates %}
                                     has-entry
