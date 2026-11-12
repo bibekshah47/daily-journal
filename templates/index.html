@@ -96,7 +96,21 @@
 
 
         <!-- Form for creating a new journal entry -->
+         <!-- Form for creating a new journal entry -->
         <form action="/" method="POST">
+
+            <!-- Optional journal title -->
+            <div class="title-field">
+                <label for="journal-title">Journal Title (Optional)</label>
+
+                <input
+                    type="text"
+                    id="journal-title"
+                    name="title"
+                    placeholder="Give your day a title..."
+                    maxlength="100"
+                >
+            </div>
 
             <!-- Mood dropdown section -->
             <div class="mood-section">
@@ -334,6 +348,14 @@
 
             <!-- Individual journal entry card -->
             <div class="journal-entry">
+                <!-- Display the journal title -->
+                <h3 class="entry-title">
+                    {% if entry[4] %}
+                        {{ entry[4] }}
+                    {% else %}
+                        {{ entry[2].split(' • ')[0] }}
+                    {% endif %}
+                </h3>
 
                 <!-- Display the date and time -->
                 <p>

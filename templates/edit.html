@@ -27,6 +27,23 @@
         action="{{ url_for('edit_entry', entry_id=entry[0]) }}"
         method="POST"
     >
+    
+
+
+        <!-- Edit journal title (optional) -->
+        <div class="title-field">
+            <label for="journal-title">Journal Title (Optional)</label>
+
+            <input
+                type="text"
+                id="journal-title"
+                name="title"
+                value="{{ entry[4] or '' }}"
+                placeholder="Give your day a title..."
+                maxlength="100"
+            >
+        </div>
+
 
         <!-- Edit the mood -->
         <div class="mood-section">

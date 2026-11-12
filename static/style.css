@@ -757,3 +757,37 @@ html {
 #journal-insights {
     scroll-margin-top: 25px;
 }
+
+/* Optional journal title */
+.title-field {
+    margin-bottom: 20px;
+}
+
+.title-field label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.title-field input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #dddddd;
+    border-radius: 8px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+.title-field input:focus {
+    outline: none;
+    border-color: #888888;
+}
+
+/* Journal entry title */
+.entry-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #222222;
+    margin: 0 0 15px;
+}

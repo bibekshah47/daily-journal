@@ -91,6 +91,8 @@ def home():
         # Get the journal text and selected mood
         journal_entry = request.form.get("journal")
         mood = request.form.get("mood")
+        title = request.form.get("title", "").strip()
+
 
         # Prevent saving empty journal entries
         if journal_entry and journal_entry.strip():
@@ -105,10 +107,10 @@ def home():
             # Save journal text, date, and mood
             cursor.execute(
                 """
-                INSERT INTO entries (content, created_at, mood)
-                VALUES (?, ?, ?)
+                INSERT INTO entries (content, created_at, mood, title)
+                VALUES (?, ?, ?, ?)
                 """,
-                (journal_entry, created_at, mood)
+                (journal_entry, created_at, mood, title)
             )
 
             # Save the changes and close the connection
@@ -292,6 +294,9 @@ def home():
         content = entry[1]
         created_at = datetime.fromisoformat(entry[2])
         mood = entry[3]
+        title = entry[4]
+
+
 
         # Format the date into a readable format
         formatted_date = created_at.strftime(
@@ -300,7 +305,7 @@ def home():
 
         # Store the entry information together
         entries.append(
-            (entry_id, content, formatted_date, mood)
+            (entry_id, content, formatted_date, mood, title)
         )
 
     # Close the database connection
@@ -369,6 +374,8 @@ def edit_entry(entry_id):
         # Get the updated journal text and mood
         updated_content = request.form.get("journal")
         updated_mood = request.form.get("mood")
+        updated_title = request.form.get("title", "").strip()
+
 
         # Make sure the updated journal text is not empty
         if updated_content and updated_content.strip():
@@ -377,10 +384,10 @@ def edit_entry(entry_id):
             cursor.execute(
                 """
                 UPDATE entries
-                SET content = ?, mood = ?
+                SET content = ?, mood = ?, title = ?
                 WHERE id = ?
                 """,
-                (updated_content, updated_mood, entry_id)
+                (updated_content, updated_mood, updated_title, entry_id) 
             )
 
             # Save the updated entry
