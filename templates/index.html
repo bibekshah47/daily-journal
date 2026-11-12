@@ -315,7 +315,7 @@
 
 
         <!-- Combined form for searching entries by keyword and date -->
-        <form action="/" method="GET" class="journal-filter-form">
+        <form action="/#journal-results" method="GET" class="journal-filter-form" id="journal-results">
 
             <!-- Search journal entries using a keyword -->
             <input
@@ -336,7 +336,7 @@
             <button type="submit">Apply Filters</button>
 
             <!-- Return to the homepage without filters -->
-            <a href="{{ url_for('home') }}" class="clear-button">
+            <a href="{{ url_for('home') }}#journal-results" class="clear-button">
                 Clear Filters
             </a>
 

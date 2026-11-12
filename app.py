@@ -126,16 +126,20 @@ def home():
     connection = sqlite3.connect("journal.db")
     cursor = connection.cursor()
 
-    # Search by keyword and date together
+    # Search by title or content, combined with date
     if search_query and filter_date:
         cursor.execute(
             """
             SELECT * FROM entries
-            WHERE content LIKE ?
+            WHERE (title LIKE ? OR content LIKE ?)
             AND date(created_at) = ?
             ORDER BY id DESC
             """,
-            ("%" + search_query + "%", filter_date)
+            (
+                "%" + search_query + "%",
+                "%" + search_query + "%",
+                filter_date
+            )
         )
 
     # Filter entries by date only
@@ -149,16 +153,21 @@ def home():
             (filter_date,)
         )
 
-    # Search entries by keyword only
+    
+    # Search journal entries by title or content
     elif search_query:
         cursor.execute(
             """
             SELECT * FROM entries
-            WHERE content LIKE ?
+            WHERE title LIKE ? OR content LIKE ?
             ORDER BY id DESC
             """,
-            ("%" + search_query + "%",)
+            (
+                "%" + search_query + "%",
+                "%" + search_query + "%"
+            )
         )
+
 
     # Display all entries if no filters are selected
     else:

@@ -791,3 +791,7 @@ html {
     color: #222222;
     margin: 0 0 15px;
 }
+
+#journal-results {
+    scroll-margin-top: 30px;
+}
