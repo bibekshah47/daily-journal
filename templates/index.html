@@ -14,66 +14,51 @@
 
     <!-- Connect the CSS stylesheet -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    
 </head>
 
 <body>
 
-
-<body>
-
-    <!-- Sidebar Navigation -->
+    <!-- Minimal Sidebar Navigation -->
     <aside class="sidebar">
 
-        <!-- Sidebar Header -->
         <div class="sidebar-header">
-            <h2>📖 My Journal</h2>
+            <i data-lucide="book-open"></i>
+            <span>My Journal</span>
         </div>
 
-        <!-- Main Navigation -->
+                
         <nav class="sidebar-nav">
 
-            <a href="/" class="sidebar-link">
-                🏠 Home
+            <a href="/#home" class="sidebar-link">
+                <i data-lucide="house"></i>
+                <span>Home</span>
             </a>
 
-            <a href="#journal-form" class="sidebar-link">
-                ✍️ Write Journal
+            <a href="/#journal-form" class="sidebar-link">
+                <i data-lucide="square-pen"></i>
+                <span>Write Journal</span>
             </a>
 
-            <a href="#journal-calendar" class="sidebar-link">
-                📅 Calendar
+            <a href="/history" class="sidebar-link">
+                <i data-lucide="calendar-days"></i>
+                <span>Journal History</span>
             </a>
 
-            <a href="#journal-insights" class="sidebar-link">
-                📊 Insights
+            <a href="/#journal-insights" class="sidebar-link">
+                <i data-lucide="chart-no-axes-column"></i>
+                <span>Insights</span>
             </a>
 
         </nav>
 
-        <!-- Journal Archive -->
-        <div class="sidebar-archive">
-
-            <h3>Journal Archive</h3>
-
-            <!-- We will make these expandable later -->
-            <div class="archive-year">📁 2026</div>
-            <div class="archive-year">📁 2025</div>
-
-        </div>
-
-        <!-- Sidebar Footer -->
-        <div class="sidebar-footer">
-            <a href="#" class="sidebar-link">
-                ⚙️ Settings
-            </a>
-        </div>
 
     </aside>
-
     
 
     <!-- Main container for the journal application -->
-    <div class="container">
+    <div class="container" id="home">
 
 
         <!-- Main heading -->
@@ -473,6 +458,40 @@
 
         </script>
     </div>
+
+        
+    <script>
+        // Display Lucide outline icons
+        lucide.createIcons();
+
+        // Find all sidebar navigation links
+        const sidebarLinks = document.querySelectorAll(".sidebar-link");
+
+        // Highlight the correct sidebar link
+        function updateActiveLink() {
+            const currentHash = window.location.hash;
+
+            sidebarLinks.forEach(function(link) {
+                link.classList.remove("active");
+
+                const linkHref = link.getAttribute("href");
+
+                if (
+                    (!currentHash && linkHref === "/#home") ||
+                    (currentHash && linkHref === "/" + currentHash)
+                ) {
+                    link.classList.add("active");
+                }
+            });
+        }
+
+        // Run when the page loads
+        updateActiveLink();
+
+        // Update when navigating between sections
+        window.addEventListener("hashchange", updateActiveLink);
+    </script>
+
 
 </body>
 </html>

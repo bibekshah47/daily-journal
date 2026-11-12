@@ -1,0 +1,124 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>
+        {% if entry[4] %}
+            {{ entry[4] }}
+        {% else %}
+            Journal Entry
+        {% endif %}
+    </title>
+
+    <!-- Connect CSS -->
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+</head>
+
+<body>
+
+    <!-- Minimal Sidebar Navigation -->
+    <aside class="sidebar">
+
+        <!-- Sidebar Header -->
+        <div class="sidebar-header">
+            <i data-lucide="book-open"></i>
+            <span>My Journal</span>
+        </div>
+
+        <!-- Sidebar Links -->
+        <nav class="sidebar-nav">
+
+            <a href="/#home" class="sidebar-link">
+                <i data-lucide="house"></i>
+                <span>Home</span>
+            </a>
+
+            <a href="/#journal-form" class="sidebar-link">
+                <i data-lucide="square-pen"></i>
+                <span>Write Journal</span>
+            </a>
+
+            <a href="{{ url_for('history') }}"
+               class="sidebar-link active">
+                <i data-lucide="calendar-days"></i>
+                <span>Journal History</span>
+            </a>
+
+            <a href="/#journal-insights" class="sidebar-link">
+                <i data-lucide="chart-no-axes-column"></i>
+                <span>Insights</span>
+            </a>
+
+        </nav>
+
+    </aside>
+
+    <!-- Main Content -->
+    <main class="container entry-page">
+
+        <!-- Back to History -->
+        <a href="{{ url_for('history') }}"
+           class="entry-back-link">
+            <i data-lucide="arrow-left"></i>
+            Back to Journal History
+        </a>
+
+        <!-- Journal Title -->
+        <h1 class="entry-page-title">
+            {% if entry[4] %}
+                {{ entry[4] }}
+            {% else %}
+                {{ entry[2][:10] }}
+            {% endif %}
+        </h1>
+
+        <!-- Journal Information -->
+        <div class="entry-page-meta">
+
+            <!-- Date -->
+            <div class="entry-meta-item">
+                <i data-lucide="calendar-days"></i>
+                <span>{{ entry[2][:10] }}</span>
+            </div>
+
+            <!-- Mood -->
+            {% if entry[3] %}
+                <div class="entry-meta-item">
+                    <i data-lucide="smile"></i>
+                    <span>{{ entry[3] }}</span>
+                </div>
+            {% endif %}
+
+        </div>
+
+        <hr class="entry-page-divider">
+
+        <!-- Full Journal Content -->
+        <div class="full-entry-content">{{ entry[1] }}</div>
+
+        <!-- Edit Entry -->
+        <div class="entry-page-actions">
+            <a href="{{ url_for('edit_entry', entry_id=entry[0]) }}"
+               class="entry-edit-button">
+                <i data-lucide="pencil"></i>
+                Edit Entry
+            </a>
+        </div>
+
+    </main>
+
+    <!-- Initialize Lucide Icons -->
+    <script>
+        lucide.createIcons();
+    </script>
+
+</body>
+</html>

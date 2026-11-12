@@ -3,144 +3,202 @@
 <html lang="en">
 
 <head>
-    <!-- Character encoding -->
     <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
 
-    <!-- Responsive page layout -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Journal | My Journal</title>
 
-    <title>Edit Journal Entry</title>
-
-    <!-- Connect the CSS stylesheet -->
     <link rel="stylesheet"
           href="{{ url_for('static', filename='style.css') }}">
+
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
 </head>
 
 <body>
 
-    <h1>Edit Journal Entry</h1>
+    <!-- Sidebar -->
+    <aside class="sidebar">
 
-    <p>Update your journal entry below.</p>
-
-    <!-- Form for updating an existing entry -->
-    <form
-        action="{{ url_for('edit_entry', entry_id=entry[0]) }}"
-        method="POST"
-    >
-    
-
-
-        <!-- Edit journal title (optional) -->
-        <div class="title-field">
-            <label for="journal-title">Journal Title (Optional)</label>
-
-            <input
-                type="text"
-                id="journal-title"
-                name="title"
-                value="{{ entry[4] or '' }}"
-                placeholder="Give your day a title..."
-                maxlength="100"
-            >
+        <div class="sidebar-header">
+            <i data-lucide="book-open"></i>
+            <span>My Journal</span>
         </div>
 
+        <nav class="sidebar-nav">
 
-        <!-- Edit the mood -->
-        <div class="mood-section">
+            <a href="/#home" class="sidebar-link">
+                <i data-lucide="house"></i>
+                <span>Home</span>
+            </a>
 
-            <label for="mood">How were you feeling?</label>
+            <a href="/#journal-form" class="sidebar-link">
+                <i data-lucide="square-pen"></i>
+                <span>Write Journal</span>
+            </a>
 
-            <select id="mood" name="mood">
+            <a href="{{ url_for('history') }}"
+               class="sidebar-link active">
+                <i data-lucide="calendar-days"></i>
+                <span>Journal History</span>
+            </a>
 
-                <option value="">Select your mood</option>
+            <a href="/#journal-insights" class="sidebar-link">
+                <i data-lucide="chart-no-axes-column"></i>
+                <span>Insights</span>
+            </a>
 
-                <option value="Happy"
-                    {% if entry[3] == "Happy" %}selected{% endif %}>
-                    😊 Happy
-                </option>
+        </nav>
 
-                <option value="Excited"
-                    {% if entry[3] == "Excited" %}selected{% endif %}>
-                    🤩 Excited
-                </option>
+    </aside>
 
-                <option value="Neutral"
-                    {% if entry[3] == "Neutral" %}selected{% endif %}>
-                    😐 Neutral
-                </option>
+    <!-- Main Content -->
+    <main class="container edit-page">
 
-                <option value="Sad"
-                    {% if entry[3] == "Sad" %}selected{% endif %}>
-                    😔 Sad
-                </option>
-
-                <option value="Stressed"
-                    {% if entry[3] == "Stressed" %}selected{% endif %}>
-                    😫 Stressed
-                </option>
-
-            </select>
-
-        </div>
-
-        <!-- Edit the existing journal text -->
-        <label for="edit-journal">Your Journal Entry</label>
-
-        <br><br>
-
-        <textarea
-            id="edit-journal"
-            name="journal"
-            rows="10"
-            cols="50">{{ entry[1] }}</textarea>
-
-        <!-- Live word counter -->
-        <p id="edit-word-count">0 words</p>
-
-        <br><br>
-
-        <!-- Save updated journal entry -->
-        <button type="submit">Save Changes</button>
-
-        <!-- Return to the homepage -->
-        <a href="{{ url_for('home') }}" class="clear-button">
-            Cancel
+        <!-- Back Navigation -->
+        <a href="{{ url_for('view_entry', entry_id=entry[0]) }}"
+           class="edit-back-link">
+            <i data-lucide="arrow-left"></i>
+            Back to Journal Entry
         </a>
 
-    </form>
+        <!-- Heading -->
+        <div class="edit-page-header">
+            <h1>Edit Journal Entry</h1>
+            <p>Make changes to your thoughts and memories.</p>
+        </div>
 
+        <!-- Edit Form -->
+        <form
+            method="POST"
+            action="{{ url_for('edit_entry', entry_id=entry[0]) }}"
+            class="edit-journal-form"
+        >
 
-    <!-- JavaScript for counting words on the edit page -->
+            <!-- Journal Title -->
+            <div class="edit-form-group">
+
+                <label for="title">
+                    Journal Title
+                    <span class="edit-optional">(Optional)</span>
+                </label>
+
+                <input
+                    type="text"
+                    id="title"
+                    name="title"
+                    placeholder="Give your journal a title..."
+                    value="{{ entry[4] or '' }}"
+                >
+
+            </div>
+
+            <!-- Mood -->
+            <div class="edit-form-group">
+
+                <label for="mood">
+                    How were you feeling?
+                </label>
+
+                <select id="mood" name="mood">
+
+                    <option value="">Select a mood</option>
+
+                    <option value="Happy"
+                        {% if entry[3] == "Happy" %}selected{% endif %}>
+                        😊 Happy
+                    </option>
+
+                    <option value="Excited"
+                        {% if entry[3] == "Excited" %}selected{% endif %}>
+                        🤩 Excited
+                    </option>
+
+                    <option value="Neutral"
+                        {% if entry[3] == "Neutral" %}selected{% endif %}>
+                        😐 Neutral
+                    </option>
+
+                    <option value="Sad"
+                        {% if entry[3] == "Sad" %}selected{% endif %}>
+                        😔 Sad
+                    </option>
+
+                    <option value="Stressed"
+                        {% if entry[3] == "Stressed" %}selected{% endif %}>
+                        😣 Stressed
+                    </option>
+
+                </select>
+
+            </div>
+
+            <!-- Journal Content -->
+            <div class="edit-form-group">
+
+                <label for="journal">
+                    Your Journal Entry
+                </label>
+
+                <textarea
+                    id="journal"
+                    name="journal"
+                    rows="12"
+                    placeholder="Write your thoughts here..."
+                    required
+                >{{ entry[1] }}</textarea>
+
+                <div class="edit-word-count">
+                    <span id="word-count">0 words</span>
+                </div>
+
+            </div>
+
+            <!-- Buttons -->
+            <div class="edit-form-actions">
+
+                <button type="submit"
+                        class="edit-save-button">
+                    <i data-lucide="check"></i>
+                    Save Changes
+                </button>
+
+                <a
+                    href="{{ url_for('view_entry', entry_id=entry[0]) }}"
+                    class="edit-cancel-button"
+                >
+                    Cancel
+                </a>
+
+            </div>
+
+        </form>
+
+    </main>
+
+    <!-- JavaScript -->
     <script>
+        lucide.createIcons();
 
-        // Find the edit textarea
-        const journalInput = document.getElementById("edit-journal");
+        const journalTextarea = document.getElementById("journal");
+        const wordCount = document.getElementById("word-count");
 
-        // Find the word count paragraph
-        const wordCount = document.getElementById("edit-word-count");
-
-        // Function for updating the word count
         function updateWordCount() {
+            const text = journalTextarea.value.trim();
 
-            // Get the text without extra spaces
-            const text = journalInput.value.trim();
+            const count = text
+                ? text.split(/\s+/).length
+                : 0;
 
-            // Calculate the number of words
-            const count = text === ""
-                ? 0
-                : text.split(/\s+/).length;
-
-            // Display the word count
-            wordCount.textContent =
-                count + (count === 1 ? " word" : " words");
+            wordCount.textContent = count + " words";
         }
 
-        // Show the current word count when the page opens
+        journalTextarea.addEventListener(
+            "input",
+            updateWordCount
+        );
+
         updateWordCount();
-
-        // Update the count whenever the user types
-        journalInput.addEventListener("input", updateWordCount);
-
     </script>
 
 </body>

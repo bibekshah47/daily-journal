@@ -366,7 +366,7 @@ def delete_entry(entry_id):
     connection.close()
 
     # Return to the homepage
-    return redirect(url_for("home"))
+    return redirect(url_for("history"))
 
 
 # Edit an existing journal entry
@@ -404,7 +404,7 @@ def edit_entry(entry_id):
             connection.close()
 
             # Return to the homepage
-            return redirect(url_for("home"))
+            return redirect(url_for("view_entry", entry_id=entry_id))
 
     # Retrieve the journal entry being edited
     cursor.execute(
@@ -421,6 +421,154 @@ def edit_entry(entry_id):
 
     # Display the edit page
     return render_template("edit.html", entry=entry)
+
+
+
+@app.route("/history")
+def history():
+    today = date.today()
+
+    # Read filters from the URL
+    search_query = request.args.get("search", "").strip()
+    filter_date = request.args.get("filter_date", "").strip()
+    selected_month = request.args.get("month", "").strip()
+
+    # Validate the selected date
+    if filter_date:
+        try:
+            date.fromisoformat(filter_date)
+        except ValueError:
+            filter_date = ""
+
+    # Decide which month the calendar should display
+    try:
+        if selected_month:
+            displayed_month = datetime.strptime(
+                selected_month, "%Y-%m"
+            ).date()
+        elif filter_date:
+            displayed_month = date.fromisoformat(
+                filter_date
+            ).replace(day=1)
+        else:
+            displayed_month = today.replace(day=1)
+    except ValueError:
+        displayed_month = today.replace(day=1)
+
+    current_year = displayed_month.year
+    current_month = displayed_month.month
+
+    # Generate the calendar
+    cal = calendar.Calendar(firstweekday=6)
+    calendar_weeks = cal.monthdatescalendar(
+        current_year, current_month
+    )
+
+    previous_month = (
+        displayed_month - timedelta(days=1)
+    ).strftime("%Y-%m")
+
+    if current_month == 12:
+        next_month = f"{current_year + 1}-01"
+    else:
+        next_month = f"{current_year}-{current_month + 1:02d}"
+
+    # Connect to SQLite
+    connection = sqlite3.connect("journal.db")
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+
+    # Get dates that contain journal entries
+    cursor.execute("""
+        SELECT DISTINCT date(created_at) AS entry_date
+        FROM entries
+    """)
+
+    calendar_entry_dates = {
+        row["entry_date"]
+        for row in cursor.fetchall()
+    }
+
+    # Build the journal search query
+    query = "SELECT * FROM entries WHERE 1=1"
+    parameters = []
+
+    if search_query:
+        query += " AND (title LIKE ? OR content LIKE ?)"
+        keyword = f"%{search_query}%"
+        parameters.extend([keyword, keyword])
+
+    if filter_date:
+        query += " AND date(created_at) = ?"
+        parameters.append(filter_date)
+
+    query += " ORDER BY created_at DESC, id DESC"
+
+    cursor.execute(query, parameters)
+    rows = cursor.fetchall()
+
+    # Count all saved entries
+    cursor.execute("SELECT COUNT(*) FROM entries")
+    total_entries = cursor.fetchone()[0]
+
+    connection.close()
+
+    # Format entries for display
+    entries = []
+
+    for row in rows:
+        created_at = datetime.fromisoformat(
+            row["created_at"]
+        )
+
+        entries.append({
+            "id": row["id"],
+            "title": row["title"],
+            "content": row["content"],
+            "mood": row["mood"],
+            "date": created_at.strftime("%B %d, %Y"),
+            "time": created_at.strftime("%I:%M %p")
+        })
+
+    return render_template(
+        "history.html",
+        entries=entries,
+        total_entries=total_entries,
+        search_query=search_query,
+        filter_date=filter_date,
+        displayed_month=displayed_month,
+        current_month=current_month,
+        calendar_weeks=calendar_weeks,
+        previous_month=previous_month,
+        next_month=next_month,
+        calendar_entry_dates=calendar_entry_dates
+    )
+
+
+
+# View a single journal entry
+@app.route("/entry/<int:entry_id>")
+def view_entry(entry_id):
+
+    # Connect to the database
+    connection = sqlite3.connect("journal.db")
+    cursor = connection.cursor()
+
+    # Find the journal entry using its ID
+    cursor.execute(
+        "SELECT * FROM entries WHERE id = ?",
+        (entry_id,)
+    )
+
+    entry = cursor.fetchone()
+    connection.close()
+
+    # Show an error if the entry doesn't exist
+    if entry is None:
+        return "Journal entry not found", 404
+
+    # Send the entry to the HTML page
+    return render_template("entry.html", entry=entry)
 
 
 # Start the Flask development server
