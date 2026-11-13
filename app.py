@@ -11,6 +11,7 @@ import calendar
 import os
 from database import initialize_database
 from rich_text import prepare_content, safe_journal_html
+from journal_insights import get_journal_stats
 
 
 # Create the Flask application
@@ -59,46 +60,7 @@ def home():
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
-    # 1. Count all journal entries
-    cursor.execute("SELECT COUNT(*) FROM entries")
-    total_entries = cursor.fetchone()[0]
-
-    # 2. Count entries from the current month
-    current_month = today.strftime("%Y-%m")
-
-    cursor.execute("""
-        SELECT COUNT(*)
-        FROM entries
-        WHERE substr(created_at, 1, 7) = ?
-    """, (current_month,))
-
-    monthly_entries = cursor.fetchone()[0]
-
-    # 3. Get the unique dates when journals were written
-    cursor.execute("""
-        SELECT DISTINCT date(created_at) AS journal_date
-        FROM entries
-        WHERE date(created_at) IS NOT NULL
-        ORDER BY journal_date DESC
-    """)
-
-    journal_dates = {
-        date.fromisoformat(row["journal_date"])
-        for row in cursor.fetchall()
-    }
-
-    # Calculate the current writing streak
-    current_streak = 0
-
-    # A streak is still active if the user wrote yesterday
-    if today in journal_dates:
-        check_date = today
-    else:
-        check_date = today - timedelta(days=1)
-
-    while check_date in journal_dates:
-        current_streak += 1
-        check_date -= timedelta(days=1)
+    stats = get_journal_stats(connection, today)
 
     # 4. Get the three most recent journal entries
     cursor.execute("""
@@ -139,11 +101,21 @@ def home():
         "index.html",
         greeting=greeting,
         today=today,
-        total_entries=total_entries,
-        monthly_entries=monthly_entries,
-        current_streak=current_streak,
+        total_entries=stats["total_entries"],
+        monthly_entries=stats["monthly_entries"],
+        current_streak=stats["current_streak"],
         recent_entries=recent_entries
     )
+
+
+@app.route("/insights")
+def insights():
+    connection = sqlite3.connect(app.config["DATABASE"])
+    try:
+        stats = get_journal_stats(connection)
+    finally:
+        connection.close()
+    return render_template("insights.html", **stats)
 
 
 # Delete an existing journal entry

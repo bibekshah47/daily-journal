@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insights | My Journal</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+    <aside class="sidebar">
+
+        <div class="sidebar-header">
+            <i data-lucide="book-open"></i>
+            <span>My Journal</span>
+        </div>
+
+        <nav class="sidebar-nav">
+
+            <a href="{{ url_for('home') }}"
+               class="sidebar-link">
+                <i data-lucide="house"></i>
+                <span>Home</span>
+            </a>
+
+            <a href="{{ url_for('write_journal') }}"
+               class="sidebar-link">
+                <i data-lucide="square-pen"></i>
+                <span>Write Journal</span>
+            </a>
+
+            <a href="{{ url_for('history') }}"
+               class="sidebar-link">
+                <i data-lucide="calendar-days"></i>
+                <span>Journal History</span>
+            </a>
+
+            <a href="{{ url_for('insights') }}"
+               class="sidebar-link active" aria-current="page">
+                <i data-lucide="chart-no-axes-column"></i>
+                <span>Insights</span>
+            </a>
+
+        </nav>
+
+    </aside>
+
+    <main class="container insights-page">
+        <header class="insights-header">
+            <h1>Insights</h1>
+            <p>A small look at your writing and reflection habits.</p>
+        </header>
+        {% if not total_entries %}
+        <div class="insights-empty">
+            <i data-lucide="notebook-pen" aria-hidden="true"></i>
+            <h2>Your story starts with one entry.</h2>
+            <p>Write a little about your day. Your insights will grow with you.</p>
+            <a href="{{ url_for('write_journal') }}" class="dashboard-write-button">Write your first entry</a>
+        </div>
+        {% endif %}
+        <section class="insights-grid" aria-label="Journal statistics">
+            {% set cards = [
+                ('Total entries', total_entries, 'book-open', 'Journal entries saved'),
+                ('Current streak', current_streak, 'flame', 'Consecutive writing days · active through yesterday', 'days'),
+                ('Longest streak', longest_streak, 'award', 'Your longest run of consecutive writing days', 'days'),
+                ('This month', monthly_entries, 'calendar-days', 'Entries written this calendar month'),
+                ('Entries with reflections', reflection_entries, 'brain', 'Entries with at least one reflection answer'),
+                ('Reflection completion', ('%.1f'|format(reflection_rate)) ~ '%', 'circle-check', 'Percentage of all entries with a reflection')
+            ] %}
+            {% for card in cards %}
+            <article class="insights-card">
+                <div class="insights-card-heading">
+                    <h2>{{ card[0] }}</h2>
+                    <i data-lucide="{{ card[2] }}" aria-hidden="true"></i>
+                </div>
+                <p class="insights-value">{{ card[1] }}{% if card|length > 4 %} <span>{{ 'day' if card[1] == 1 else 'days' }}</span>{% endif %}</p>
+                <p class="insights-description">{{ card[3] }}</p>
+            </article>
+            {% endfor %}
+        </section>
+        <section class="insights-card insights-reflection" aria-labelledby="top-question-heading">
+            <div class="insights-card-heading">
+                <h2 id="top-question-heading">Most consistently answered reflection question</h2>
+                <i data-lucide="message-circle" aria-hidden="true"></i>
+            </div>
+            {% if top_questions %}
+                {% if top_questions|length > 1 %}<p class="insights-description">A tie — you return to these questions equally often.</p>{% endif %}
+                <ul class="insights-questions">
+                {% for question in top_questions %}<li>{{ question }}</li>{% endfor %}
+                </ul>
+                <p class="insights-description">Answered in {{ top_question_count }} {{ 'entry' if top_question_count == 1 else 'entries' }}{% if top_questions|length > 1 %} each{% endif %}.</p>
+            {% else %}
+                <p class="insights-question-empty">No reflections yet</p>
+                <p class="insights-description">Try one optional reflection question the next time you write.</p>
+                {% if total_entries %}<a class="insights-write-link" href="{{ url_for('write_journal') }}">Write and reflect <i data-lucide="arrow-right" aria-hidden="true"></i></a>{% endif %}
+            {% endif %}
+        </section>
+    </main>
+    <script>lucide.createIcons();</script>
+</body>
+</html>
