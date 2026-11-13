@@ -102,7 +102,11 @@
         <hr class="entry-page-divider">
 
         <!-- Full Journal Content -->
+        {% if entry.get('content_html') %}
+        <div class="formatted-entry-content">{{ entry.content_html | journal_html }}</div>
+        {% else %}
         <div class="full-entry-content">{{ entry["content"] }}</div>
+        {% endif %}
 
         {% if entry.went_well or entry.went_wrong or entry.improve_tomorrow %}
         <section class="saved-reflection" aria-labelledby="reflection-heading">

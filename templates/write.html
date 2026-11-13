@@ -9,6 +9,10 @@
 
     <title>Write Journal | My Journal</title>
 
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/quill/quill.snow.css') }}">
+    <script defer src="{{ url_for('static', filename='vendor/quill/quill.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='journal-editor.js') }}"></script>
+
     <link rel="stylesheet"
           href="{{ url_for('static', filename='style.css') }}">
 
@@ -163,7 +167,7 @@
             <!-- Journal Content -->
             <div class="write-form-group">
 
-                <label for="journal">
+                <label for="journal" id="journal-label">
                     Your Journal Entry
                 </label>
 
@@ -174,6 +178,11 @@
                     placeholder="What's on your mind today?"
                     required
                 >{{ content or '' }}</textarea>
+
+                <div id="journal-editor" class="journal-editor" hidden></div>
+                <input type="hidden" name="editor_format" id="editor-format" value="plain">
+                <input type="hidden" name="journal_html" id="journal-html" value="">
+                <template id="initial-journal-html">{% if content_html %}{{ content_html | journal_html }}{% endif %}</template>
 
                 <div class="write-word-count">
                     <span id="word-count">0 words</span>
@@ -293,6 +302,8 @@
                 mood: moodSelect.value,
                 content: journalTextarea.value,
                 ...Object.fromEntries(reflectionInputs.map(input => [input.name, input.value])),
+                version: 2,
+                editorDelta: window.journalEditor ? window.journalEditor.getDelta() : null,
                 updatedAt: new Date().toISOString()
             };
         }
@@ -384,9 +395,7 @@
                 reflectionInputs.forEach(input => {
                     input.value = draft[input.name] || "";
                 });
-                if (reflectionInputs.some(input => input.value.trim())) {
-                    document.getElementById("daily-reflection").open = true;
-                }
+                window.restoredJournalDraft = draft;
                 updateWordCount();
                 setStatus("Unfinished draft restored");
             } catch (error) {
@@ -428,6 +437,7 @@
                 writeForm.reset();
                 [titleInput, moodSelect, journalTextarea, ...reflectionInputs]
                     .forEach(input => { input.value = ""; });
+                if (window.journalEditor) window.journalEditor.clear();
                 updateWordCount();
 
                 setStatus("Draft discarded");

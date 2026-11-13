@@ -9,6 +9,10 @@
 
     <title>Edit Journal | My Journal</title>
 
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/quill/quill.snow.css') }}">
+    <script defer src="{{ url_for('static', filename='vendor/quill/quill.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='journal-editor.js') }}"></script>
+
     <link rel="stylesheet"
           href="{{ url_for('static', filename='style.css') }}">
 
@@ -138,7 +142,7 @@
             <!-- Journal Content -->
             <div class="edit-form-group">
 
-                <label for="journal">
+                <label for="journal" id="journal-label">
                     Your Journal Entry
                 </label>
 
@@ -149,6 +153,11 @@
                     placeholder="Write your thoughts here..."
                     required
                 >{{ entry["content"] }}</textarea>
+
+                <div id="journal-editor" class="journal-editor" hidden></div>
+                <input type="hidden" name="editor_format" id="editor-format" value="plain">
+                <input type="hidden" name="journal_html" id="journal-html" value="">
+                <template id="initial-journal-html">{% if entry.get('content_html') %}{{ entry.get('content_html') | journal_html }}{% endif %}</template>
 
                 <div class="edit-word-count">
                     <span id="word-count">0 words</span>

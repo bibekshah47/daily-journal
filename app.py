@@ -10,15 +10,30 @@ import sqlite3
 import calendar
 import os
 from database import initialize_database
+from rich_text import prepare_content, safe_journal_html
 
 
 # Create the Flask application
 app = Flask(__name__)
 
 
-# Allow isolated databases for testing; normal startup upgrades journal.db.
+# Allow isolated databases for testing and explicit upgrades.
 app.config["DATABASE"] = os.environ.get("JOURNAL_DATABASE", "journal.db")
-initialize_database(app.config["DATABASE"])
+
+@app.cli.command("init-db")
+def init_db_command():
+    """Add missing schema columns without replacing existing data."""
+    initialize_database(app.config["DATABASE"])
+    print("Database initialized successfully!")
+
+
+@app.before_request
+def ensure_database_schema():
+    """Upgrade the configured database before any route reads or writes it."""
+    initialize_database(app.config["DATABASE"])
+
+
+app.jinja_env.filters["journal_html"] = safe_journal_html
 
 REFLECTION_FIELDS = ("went_well", "went_wrong", "improve_tomorrow")
 
@@ -166,7 +181,7 @@ def edit_entry(entry_id):
     if request.method == "POST":
 
         # Get the updated journal text and mood
-        updated_content = request.form.get("journal")
+        updated_content, content_html = prepare_content(request.form)
         updated_mood = request.form.get("mood")
         updated_title = request.form.get("title", "").strip()
         reflections = {field: request.form.get(field, "").strip()
@@ -180,11 +195,11 @@ def edit_entry(entry_id):
             cursor.execute(
                 """
                 UPDATE entries
-                SET content = ?, mood = ?, title = ?,
+                SET content = ?, mood = ?, title = ?, content_html = ?,
                     went_well = ?, went_wrong = ?, improve_tomorrow = ?
                 WHERE id = ?
                 """,
-                (updated_content, updated_mood, updated_title,
+                (updated_content, updated_mood, updated_title, content_html,
                  *(reflections[field] for field in REFLECTION_FIELDS), entry_id)
             )
 
@@ -201,7 +216,8 @@ def edit_entry(entry_id):
         (entry_id,)
     )
 
-    entry = cursor.fetchone()
+    row = cursor.fetchone()
+    entry = dict(row) if row is not None else None
     connection.close()
 
     # Show an error if the entry does not exist
@@ -212,7 +228,7 @@ def edit_entry(entry_id):
     if request.method == "POST":
         entry = dict(entry)
         entry.update(title=updated_title, content=updated_content or "",
-                     mood=updated_mood, **reflections)
+                     mood=updated_mood, content_html=content_html, **reflections)
         return render_template("edit.html", entry=entry,
                                error="Please write something before saving."), 400
 
@@ -406,7 +422,8 @@ def view_entry(entry_id):
         (entry_id,)
     )
 
-    entry = cursor.fetchone()
+    row = cursor.fetchone()
+    entry = dict(row) if row is not None else None
     connection.close()
 
     # Show an error if the entry doesn't exist
@@ -426,7 +443,7 @@ def write_journal():
 
         title = request.form.get("title", "").strip()
         mood = request.form.get("mood", "").strip()
-        content = request.form.get("journal", "").strip()
+        content, content_html = prepare_content(request.form)
         reflections = {field: request.form.get(field, "").strip()
                        for field in REFLECTION_FIELDS}
 
@@ -438,6 +455,7 @@ def write_journal():
                 title=title,
                 mood=mood,
                 content=content,
+                content_html=content_html,
                 **reflections
             ), 400
 
@@ -451,10 +469,10 @@ def write_journal():
         # Save the journal entry
         cursor.execute("""
             INSERT INTO entries
-                (title, content, mood, created_at,
+                (title, content, mood, created_at, content_html,
                  went_well, went_wrong, improve_tomorrow)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (title, content, mood, created_at,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (title, content, mood, created_at, content_html,
               *(reflections[field] for field in REFLECTION_FIELDS)))
 
         # Get the ID of the newly saved entry
