@@ -27,7 +27,8 @@
 
         <nav class="sidebar-nav">
 
-            <a href="/#home" class="sidebar-link">
+            <a href="{{ url_for('home') }}"
+               class="sidebar-link">
                 <i data-lucide="house"></i>
                 <span>Home</span>
             </a>
@@ -44,7 +45,8 @@
                 <span>Journal History</span>
             </a>
 
-            <a href="/#dashboard-stats" class="sidebar-link">
+            <a href="{{ url_for('home') }}#dashboard-stats"
+               class="sidebar-link">
                 <i data-lucide="chart-no-axes-column"></i>
                 <span>Insights</span>
             </a>
@@ -65,11 +67,21 @@
 
             <h1>Write Journal</h1>
 
-            <p>
-                A little space for your thoughts.
-            </p>
+            <p>A little space for your thoughts.</p>
 
         </header>
+
+        <!-- Auto-Save Status -->
+        <div id="autosave-status"
+             role="status"
+             aria-live="polite"
+             style="
+                font-size: 13px;
+                color: #6b7280;
+                margin-bottom: 20px;
+             ">
+            Draft protection is on
+        </div>
 
         <!-- Error Message -->
         {% if error %}
@@ -101,7 +113,7 @@
                     id="title"
                     name="title"
                     placeholder="Give today a title..."
-                    value="{{ title }}"
+                    value="{{ title or '' }}"
                 >
 
             </div>
@@ -161,12 +173,10 @@
                     rows="14"
                     placeholder="What's on your mind today?"
                     required
-                >{{ content }}</textarea>
+                >{{ content or '' }}</textarea>
 
                 <div class="write-word-count">
-                    <span id="word-count">
-                        0 words
-                    </span>
+                    <span id="word-count">0 words</span>
                 </div>
 
             </div>
@@ -188,6 +198,19 @@
                     Cancel
                 </a>
 
+                <button
+                    type="button"
+                    id="discard-draft"
+                    class="write-cancel-button"
+                    style="
+                        cursor: pointer;
+                        background: transparent;
+                        color: #b45353;
+                    "
+                >
+                    Discard Draft
+                </button>
+
             </div>
 
         </form>
@@ -197,6 +220,16 @@
     <!-- JavaScript -->
     <script>
         lucide.createIcons();
+
+        const DRAFT_KEY = "my-journal-new-entry-draft";
+        const SAVED_SUBMISSION_KEY =
+            "my-journal-successful-submission";
+
+        const titleInput =
+            document.getElementById("title");
+
+        const moodSelect =
+            document.getElementById("mood");
 
         const journalTextarea =
             document.getElementById("journal");
@@ -210,6 +243,17 @@
         const saveButton =
             document.getElementById("save-button");
 
+        const autosaveStatus =
+            document.getElementById("autosave-status");
+
+        const discardButton =
+            document.getElementById("discard-draft");
+
+        let autosaveTimer = null;
+        let submitting = false;
+        let draftStorageAvailable = true;
+
+        // Count the words in the journal.
         function updateWordCount() {
             const text = journalTextarea.value.trim();
 
@@ -221,22 +265,216 @@
                 count + (count === 1 ? " word" : " words");
         }
 
-        journalTextarea.addEventListener(
-            "input",
-            updateWordCount
-        );
+        // Collect everything the user has written.
+        function getDraft() {
+            return {
+                title: titleInput.value,
+                mood: moodSelect.value,
+                content: journalTextarea.value,
+                updatedAt: new Date().toISOString()
+            };
+        }
 
-        writeForm.addEventListener("submit", function () {
-            if (!writeForm.checkValidity()) {
+        function setStatus(message) {
+            autosaveStatus.textContent = message;
+        }
+
+        // Save the draft in this browser.
+        function saveDraft() {
+            if (submitting || !draftStorageAvailable) {
                 return;
             }
 
-            saveButton.disabled = true;
-            saveButton.textContent = "Saving...";
-        });
+            const draft = getDraft();
 
+            try {
+                if (
+                    !draft.title.trim() &&
+                    !draft.mood &&
+                    !draft.content.trim()
+                ) {
+                    localStorage.removeItem(DRAFT_KEY);
+                    setStatus("Draft protection is on");
+                    return;
+                }
+
+                localStorage.setItem(
+                    DRAFT_KEY,
+                    JSON.stringify(draft)
+                );
+
+                setStatus("Draft saved automatically");
+            } catch (error) {
+                draftStorageAvailable = false;
+                setStatus(
+                    "Auto-save unavailable in this browser"
+                );
+                console.error(error);
+            }
+        }
+
+        // Wait one second after typing before saving.
+        function scheduleAutosave() {
+            if (submitting) {
+                return;
+            }
+
+            setStatus("Saving draft...");
+
+            clearTimeout(autosaveTimer);
+
+            autosaveTimer = setTimeout(
+                saveDraft,
+                1000
+            );
+        }
+
+        // Restore unfinished writing.
+        function restoreDraft() {
+            try {
+                const storedDraft =
+                    localStorage.getItem(DRAFT_KEY);
+
+                if (!storedDraft) {
+                    return;
+                }
+
+                const draft = JSON.parse(storedDraft);
+
+                // Do not overwrite values Flask returned
+                // after a form validation error.
+                const serverHasContent =
+                    titleInput.value.trim() ||
+                    moodSelect.value ||
+                    journalTextarea.value.trim();
+
+                if (serverHasContent) {
+                    return;
+                }
+
+                titleInput.value = draft.title || "";
+                moodSelect.value = draft.mood || "";
+                journalTextarea.value =
+                    draft.content || "";
+
+                updateWordCount();
+                setStatus("Unfinished draft restored");
+            } catch (error) {
+                setStatus("Could not restore saved draft");
+                console.error(error);
+            }
+        }
+
+        // Save immediately when leaving the page.
+        function saveBeforeLeaving() {
+            clearTimeout(autosaveTimer);
+
+            if (!submitting) {
+                saveDraft();
+            }
+        }
+
+        // Discard the current draft.
+        discardButton.addEventListener(
+            "click",
+            function () {
+                const confirmed = confirm(
+                    "Discard your unfinished journal? " +
+                    "This cannot be undone."
+                );
+
+                if (!confirmed) {
+                    return;
+                }
+
+                clearTimeout(autosaveTimer);
+
+                try {
+                    localStorage.removeItem(DRAFT_KEY);
+                } catch (error) {
+                    console.error(error);
+                }
+
+                writeForm.reset();
+                updateWordCount();
+
+                setStatus("Draft discarded");
+            }
+        );
+
+        // Watch all journal fields for changes.
+        titleInput.addEventListener(
+            "input",
+            scheduleAutosave
+        );
+
+        moodSelect.addEventListener(
+            "change",
+            scheduleAutosave
+        );
+
+        journalTextarea.addEventListener(
+            "input",
+            function () {
+                updateWordCount();
+                scheduleAutosave();
+            }
+        );
+
+        // Handle the Save Journal button.
+        writeForm.addEventListener(
+            "submit",
+            function (event) {
+                if (!writeForm.checkValidity()) {
+                    return;
+                }
+
+                // Preserve a backup before submitting.
+                clearTimeout(autosaveTimer);
+                saveDraft();
+
+                submitting = true;
+
+                sessionStorage.setItem(
+                    "my-journal-save-pending",
+                    "true"
+                );
+
+                saveButton.disabled = true;
+                saveButton.textContent = "Saving...";
+            }
+        );
+
+        window.addEventListener(
+            "pagehide",
+            saveBeforeLeaving
+        );
+
+        // Restore the draft when the page opens.
+        restoreDraft();
         updateWordCount();
+
     </script>
+
+
+    <script>
+        // Only clear a draft after arriving from
+        // a successful new-journal submission.
+        if (
+            sessionStorage.getItem(
+                "my-journal-save-pending"
+            ) === "true"
+        ) {
+            localStorage.removeItem(
+                "my-journal-new-entry-draft"
+            );
+
+            sessionStorage.removeItem(
+                "my-journal-save-pending"
+            );
+        }
+    </script>
+
 
 </body>
 </html>
