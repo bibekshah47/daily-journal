@@ -14,336 +14,112 @@ import calendar
 app = Flask(__name__)
 
 
-# Homepage: display, save, search, and filter journal entries
-@app.route("/", methods=["GET", "POST"])
+
+# Home Dashboard
+@app.route("/")
 def home():
 
-    # Get today's date
+    # Get today's date and current time
     today = date.today()
+    current_hour = datetime.now().hour
 
-    # Message shown after submitting a journal entry
-    message = None
-
-
-    today = date.today()
-    message = None
-
-        
-    # Get the selected month from the website URL
-    # Example: /?month=2026-10
-    selected_month = request.args.get("month", "")
-
-    # Use the current month if no month was selected
-    if selected_month:
-        try:
-            # Convert "2026-10" into a Python date
-            displayed_month = datetime.strptime(
-                selected_month, "%Y-%m"
-            ).date()
-
-        # Handle an invalid month in the URL
-        except ValueError:
-            displayed_month = today.replace(day=1)
+    # Choose a greeting based on the time
+    if current_hour < 12:
+        greeting = "Good morning"
+    elif current_hour < 17:
+        greeting = "Good afternoon"
     else:
-        displayed_month = today.replace(day=1)
+        greeting = "Good evening"
 
-    # Get the year and month being displayed
-    current_year = displayed_month.year
-    current_month = displayed_month.month
-
-    # Create a calendar starting on Sunday
-    cal = calendar.Calendar(firstweekday=6)
-
-    # Generate the calendar for the selected month
-    calendar_weeks = cal.monthdatescalendar(
-        current_year,
-        current_month
-    )
-
-    # Calculate the previous month
-    previous_month = (
-        displayed_month.replace(day=1) - timedelta(days=1)
-    ).strftime("%Y-%m")
-
-    # Calculate the next month
-    if current_month == 12:
-        next_month = f"{current_year + 1}-01"
-    else:
-        next_month = f"{current_year}-{current_month + 1:02d}"
-
-    # Print values to test
-    print("Displayed month:", displayed_month)
-    print("Previous month:", previous_month)
-    print("Next month:", next_month)
-
-
-    # Print the calendar weeks to test the result
-    print("Calendar weeks:", calendar_weeks)
-
-
-    # Get search and date filter values from the URL
-    search_query = request.args.get("search", "")
-    filter_date = request.args.get("filter_date", "")
-
-    # Check whether the user submitted a new journal entry
-    if request.method == "POST":
-
-        # Get the journal text and selected mood
-        journal_entry = request.form.get("journal")
-        mood = request.form.get("mood")
-        title = request.form.get("title", "").strip()
-
-
-        # Prevent saving empty journal entries
-        if journal_entry and journal_entry.strip():
-
-            # Record the current date and time
-            created_at = datetime.now().isoformat()
-
-            # Connect to the database
-            connection = sqlite3.connect("journal.db")
-            cursor = connection.cursor()
-
-            # Save journal text, date, and mood
-            cursor.execute(
-                """
-                INSERT INTO entries (content, created_at, mood, title)
-                VALUES (?, ?, ?, ?)
-                """,
-                (journal_entry, created_at, mood, title)
-            )
-
-            # Save the changes and close the connection
-            connection.commit()
-            connection.close()
-
-            message = "Your journal entry was saved successfully!"
-
-        else:
-            message = "Please write something before saving."
-
-    # Connect to the database to retrieve entries
+    # Connect to SQLite
     connection = sqlite3.connect("journal.db")
+    connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
-    # Search by title or content, combined with date
-    if search_query and filter_date:
-        cursor.execute(
-            """
-            SELECT * FROM entries
-            WHERE (title LIKE ? OR content LIKE ?)
-            AND date(created_at) = ?
-            ORDER BY id DESC
-            """,
-            (
-                "%" + search_query + "%",
-                "%" + search_query + "%",
-                filter_date
-            )
-        )
-
-    # Filter entries by date only
-    elif filter_date:
-        cursor.execute(
-            """
-            SELECT * FROM entries
-            WHERE date(created_at) = ?
-            ORDER BY id DESC
-            """,
-            (filter_date,)
-        )
-
-    
-    # Search journal entries by title or content
-    elif search_query:
-        cursor.execute(
-            """
-            SELECT * FROM entries
-            WHERE title LIKE ? OR content LIKE ?
-            ORDER BY id DESC
-            """,
-            (
-                "%" + search_query + "%",
-                "%" + search_query + "%"
-            )
-        )
-
-
-    # Display all entries if no filters are selected
-    else:
-        cursor.execute(
-            "SELECT * FROM entries ORDER BY id DESC"
-        )
-
-    # Get all matching journal entries
-    rows = cursor.fetchall()
-
-
-    # Count the total number of journal entries in the database
+    # 1. Count all journal entries
     cursor.execute("SELECT COUNT(*) FROM entries")
-
-    # fetchone() returns one row, and [0] gets the count
     total_entries = cursor.fetchone()[0]
 
+    # 2. Count entries from the current month
+    current_month = today.strftime("%Y-%m")
 
-    # Get the current month in YYYY-MM format
-    current_month = datetime.now().strftime("%Y-%m")
-
-    # Count entries written during the current month
-    cursor.execute(
-        """
-        SELECT COUNT(*) FROM entries
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM entries
         WHERE substr(created_at, 1, 7) = ?
-        """,
-        (current_month,)
-    )
+    """, (current_month,))
 
-    # Get the number returned by SQLite
     monthly_entries = cursor.fetchone()[0]
 
-    # Find the mood that appears most frequently
-    cursor.execute(
-        """
-        SELECT mood, COUNT(*) AS mood_count
+    # 3. Get the unique dates when journals were written
+    cursor.execute("""
+        SELECT DISTINCT date(created_at) AS journal_date
         FROM entries
-        WHERE mood IS NOT NULL AND mood != ''
-        GROUP BY mood
-        ORDER BY mood_count DESC, mood ASC
-        LIMIT 1
-        """
-    )
+        WHERE date(created_at) IS NOT NULL
+        ORDER BY journal_date DESC
+    """)
 
-    # Retrieve the most common mood
-    mood_result = cursor.fetchone()
-
-    # Show a default message if no moods have been recorded
-    most_common_mood = mood_result[0] if mood_result else "No mood recorded"
-
-
-    # Get all unique dates when journal entries were written
-    cursor.execute(
-        """
-        SELECT DISTINCT date(created_at)
-        FROM entries
-        ORDER BY date(created_at) DESC
-        """
-    )
-
-    # Retrieve the dates from SQLite
-    journal_dates = cursor.fetchall()
-
-
-    # Convert journal dates into a set of date strings
-    # Example: {"2026-11-01", "2026-11-06"}
-
-    calendar_entry_dates = {
-        row[0]
-        for row in journal_dates
-        if row[0] is not None
+    journal_dates = {
+        date.fromisoformat(row["journal_date"])
+        for row in cursor.fetchall()
     }
 
-    # Print the dates to verify the result
-    print("Calendar entry dates:", calendar_entry_dates)
-
-
-
-    # Convert SQLite results into Python date objects
-    dates = [
-        date.fromisoformat(row[0])
-        for row in journal_dates
-        if row[0] is not None
-    ]
-
-    # Start the streak at zero
+    # Calculate the current writing streak
     current_streak = 0
 
-    # Get today's date
-    today_date = date.today()
-
-    # A streak can continue from yesterday if
-    # today's journal entry has not been written yet
-    if today_date in dates:
-        check_date = today_date
+    # A streak is still active if the user wrote yesterday
+    if today in journal_dates:
+        check_date = today
     else:
-        check_date = today_date - timedelta(days=1)
+        check_date = today - timedelta(days=1)
 
-    # Count consecutive journaling days
-    for journal_date in dates:
+    while check_date in journal_dates:
+        current_streak += 1
+        check_date -= timedelta(days=1)
 
-        # Check whether the entry matches the expected date
-        if journal_date == check_date:
+    # 4. Get the three most recent journal entries
+    cursor.execute("""
+        SELECT id, title, content, mood, created_at
+        FROM entries
+        ORDER BY created_at DESC, id DESC
+        LIMIT 3
+    """)
 
-            # Increase the streak by one day
-            current_streak += 1
+    rows = cursor.fetchall()
 
-            # Move backward by one day
-            check_date -= timedelta(days=1)
+    recent_entries = []
 
-        # Stop when a day is missing
-        else:
-            break
-
-    # Display the calculated streak in the terminal
-    print("Current journaling streak:", current_streak)
-
-
-    # Print the dates to understand the result
-    print("Journal dates:", journal_dates)
-
-
-
-
-    # Prepare entries for displaying on the website
-    entries = []
-
-    for entry in rows:
-
-        # Get the journal entry information
-        entry_id = entry[0]
-        content = entry[1]
-        created_at = datetime.fromisoformat(entry[2])
-        mood = entry[3]
-        title = entry[4]
-
-
-
-        # Format the date into a readable format
-        formatted_date = created_at.strftime(
-            "%B %d, %Y • %I:%M %p"
+    for row in rows:
+        created_at = datetime.fromisoformat(
+            row["created_at"]
         )
 
-        # Store the entry information together
-        entries.append(
-            (entry_id, content, formatted_date, mood, title)
-        )
+        # Use the date as the title if no title was entered
+        entry_title = row["title"]
 
-    # Close the database connection
+        if not entry_title:
+            entry_title = created_at.strftime("%B %d, %Y")
+
+        recent_entries.append({
+            "id": row["id"],
+            "title": entry_title,
+            "content": row["content"],
+            "mood": row["mood"],
+            "date": created_at.strftime("%B %d, %Y"),
+            "time": created_at.strftime("%I:%M %p")
+        })
+
     connection.close()
 
-    # Display the homepage with journal entries
+    # Display the Home Dashboard
     return render_template(
         "index.html",
+        greeting=greeting,
         today=today,
-        entries=entries,
-        message=message,
-        search_query=search_query,
-        filter_date=filter_date,
-        total_entries=total_entries, # Send the total number of entries to HTML
-        monthly_entries=monthly_entries,             # Send the monthly entry count to HTML
-        most_common_mood=most_common_mood, # Send the most common mood to HTML
+        total_entries=total_entries,
+        monthly_entries=monthly_entries,
         current_streak=current_streak,
-
-    # Send calendar information to index.html
-        calendar_weeks=calendar_weeks,
-        calendar_entry_dates=calendar_entry_dates,
-        current_month=current_month,
-
-            # Calendar navigation information
-        displayed_month=displayed_month,
-        previous_month=previous_month,
-        next_month=next_month,
-
-
+        recent_entries=recent_entries
     )
 
 
