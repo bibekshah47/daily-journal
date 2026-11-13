@@ -181,6 +181,27 @@
 
             </div>
 
+        <section class="daily-reflection" id="daily-reflection" aria-labelledby="daily-reflection-heading">
+            <header class="reflection-header">
+                <h2 id="daily-reflection-heading"><i data-lucide="brain" aria-hidden="true"></i> Daily Reflection</h2>
+                <p>Take a moment to reflect on your day · Optional.</p>
+            </header>
+            <div class="reflection-fields">
+                <div class="write-form-group">
+                    <label for="went_well">What went well today?</label>
+                    <textarea id="went_well" name="went_well" rows="3" placeholder="Celebrate a small win, a meaningful moment, or something you enjoyed.">{{ went_well or '' }}</textarea>
+                </div>
+                <div class="write-form-group">
+                    <label for="went_wrong">What didn't go well today?</label>
+                    <textarea id="went_wrong" name="went_wrong" rows="3" placeholder="Reflect on a challenge, a setback, or something that felt difficult.">{{ went_wrong or '' }}</textarea>
+                </div>
+                <div class="write-form-group">
+                    <label for="improve_tomorrow">What can I improve tomorrow?</label>
+                    <textarea id="improve_tomorrow" name="improve_tomorrow" rows="3" placeholder="Think of one small step you can take to make tomorrow better.">{{ improve_tomorrow or '' }}</textarea>
+                </div>
+            </div>
+        </section>
+
             <!-- Actions -->
             <div class="write-actions">
 
@@ -222,8 +243,8 @@
         lucide.createIcons();
 
         const DRAFT_KEY = "my-journal-new-entry-draft";
-        const SAVED_SUBMISSION_KEY =
-            "my-journal-successful-submission";
+        const reflectionInputs = ["went_well", "went_wrong", "improve_tomorrow"]
+            .map(id => document.getElementById(id));
 
         const titleInput =
             document.getElementById("title");
@@ -271,6 +292,7 @@
                 title: titleInput.value,
                 mood: moodSelect.value,
                 content: journalTextarea.value,
+                ...Object.fromEntries(reflectionInputs.map(input => [input.name, input.value])),
                 updatedAt: new Date().toISOString()
             };
         }
@@ -291,7 +313,8 @@
                 if (
                     !draft.title.trim() &&
                     !draft.mood &&
-                    !draft.content.trim()
+                    !draft.content.trim() &&
+                    reflectionInputs.every(input => !input.value.trim())
                 ) {
                     localStorage.removeItem(DRAFT_KEY);
                     setStatus("Draft protection is on");
@@ -346,7 +369,8 @@
                 const serverHasContent =
                     titleInput.value.trim() ||
                     moodSelect.value ||
-                    journalTextarea.value.trim();
+                    journalTextarea.value.trim() ||
+                    reflectionInputs.some(input => input.value.trim());
 
                 if (serverHasContent) {
                     return;
@@ -357,6 +381,12 @@
                 journalTextarea.value =
                     draft.content || "";
 
+                reflectionInputs.forEach(input => {
+                    input.value = draft[input.name] || "";
+                });
+                if (reflectionInputs.some(input => input.value.trim())) {
+                    document.getElementById("daily-reflection").open = true;
+                }
                 updateWordCount();
                 setStatus("Unfinished draft restored");
             } catch (error) {
@@ -396,11 +426,17 @@
                 }
 
                 writeForm.reset();
+                [titleInput, moodSelect, journalTextarea, ...reflectionInputs]
+                    .forEach(input => { input.value = ""; });
                 updateWordCount();
 
                 setStatus("Draft discarded");
             }
         );
+
+        reflectionInputs.forEach(input => {
+            input.addEventListener("input", scheduleAutosave);
+        });
 
         // Watch all journal fields for changes.
         titleInput.addEventListener(
@@ -435,10 +471,11 @@
 
                 submitting = true;
 
-                sessionStorage.setItem(
-                    "my-journal-save-pending",
-                    "true"
-                );
+                try {
+                    sessionStorage.setItem("my-journal-save-pending", "true");
+                } catch (error) {
+                    console.error(error);
+                }
 
                 saveButton.disabled = true;
                 saveButton.textContent = "Saving...";
@@ -457,23 +494,7 @@
     </script>
 
 
-    <script>
-        // Only clear a draft after arriving from
-        // a successful new-journal submission.
-        if (
-            sessionStorage.getItem(
-                "my-journal-save-pending"
-            ) === "true"
-        ) {
-            localStorage.removeItem(
-                "my-journal-new-entry-draft"
-            );
 
-            sessionStorage.removeItem(
-                "my-journal-save-pending"
-            );
-        }
-    </script>
 
 
 </body>

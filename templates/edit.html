@@ -56,7 +56,7 @@
     <main class="container edit-page">
 
         <!-- Back Navigation -->
-        <a href="{{ url_for('view_entry', entry_id=entry[0]) }}"
+        <a href="{{ url_for('view_entry', entry_id=entry["id"]) }}"
            class="edit-back-link">
             <i data-lucide="arrow-left"></i>
             Back to Journal Entry
@@ -68,10 +68,12 @@
             <p>Make changes to your thoughts and memories.</p>
         </div>
 
+        {% if error %}<div class="write-error" role="alert">{{ error }}</div>{% endif %}
+
         <!-- Edit Form -->
         <form
             method="POST"
-            action="{{ url_for('edit_entry', entry_id=entry[0]) }}"
+            action="{{ url_for('edit_entry', entry_id=entry["id"]) }}"
             class="edit-journal-form"
         >
 
@@ -88,7 +90,7 @@
                     id="title"
                     name="title"
                     placeholder="Give your journal a title..."
-                    value="{{ entry[4] or '' }}"
+                    value="{{ entry["title"] or '' }}"
                 >
 
             </div>
@@ -105,27 +107,27 @@
                     <option value="">Select a mood</option>
 
                     <option value="Happy"
-                        {% if entry[3] == "Happy" %}selected{% endif %}>
+                        {% if entry["mood"] == "Happy" %}selected{% endif %}>
                         😊 Happy
                     </option>
 
                     <option value="Excited"
-                        {% if entry[3] == "Excited" %}selected{% endif %}>
+                        {% if entry["mood"] == "Excited" %}selected{% endif %}>
                         🤩 Excited
                     </option>
 
                     <option value="Neutral"
-                        {% if entry[3] == "Neutral" %}selected{% endif %}>
+                        {% if entry["mood"] == "Neutral" %}selected{% endif %}>
                         😐 Neutral
                     </option>
 
                     <option value="Sad"
-                        {% if entry[3] == "Sad" %}selected{% endif %}>
+                        {% if entry["mood"] == "Sad" %}selected{% endif %}>
                         😔 Sad
                     </option>
 
                     <option value="Stressed"
-                        {% if entry[3] == "Stressed" %}selected{% endif %}>
+                        {% if entry["mood"] == "Stressed" %}selected{% endif %}>
                         😣 Stressed
                     </option>
 
@@ -146,13 +148,34 @@
                     rows="12"
                     placeholder="Write your thoughts here..."
                     required
-                >{{ entry[1] }}</textarea>
+                >{{ entry["content"] }}</textarea>
 
                 <div class="edit-word-count">
                     <span id="word-count">0 words</span>
                 </div>
 
             </div>
+
+        <section class="daily-reflection" id="daily-reflection" aria-labelledby="daily-reflection-heading">
+            <header class="reflection-header">
+                <h2 id="daily-reflection-heading"><i data-lucide="brain" aria-hidden="true"></i> Daily Reflection</h2>
+                <p>Take a moment to reflect on your day · Optional.</p>
+            </header>
+            <div class="reflection-fields">
+                <div class="edit-form-group">
+                    <label for="went_well">What went well today?</label>
+                    <textarea id="went_well" name="went_well" rows="3" placeholder="Celebrate a small win, a meaningful moment, or something you enjoyed.">{{ entry["went_well"] or '' }}</textarea>
+                </div>
+                <div class="edit-form-group">
+                    <label for="went_wrong">What didn't go well today?</label>
+                    <textarea id="went_wrong" name="went_wrong" rows="3" placeholder="Reflect on a challenge, a setback, or something that felt difficult.">{{ entry["went_wrong"] or '' }}</textarea>
+                </div>
+                <div class="edit-form-group">
+                    <label for="improve_tomorrow">What can I improve tomorrow?</label>
+                    <textarea id="improve_tomorrow" name="improve_tomorrow" rows="3" placeholder="Think of one small step you can take to make tomorrow better.">{{ entry["improve_tomorrow"] or '' }}</textarea>
+                </div>
+            </div>
+        </section>
 
             <!-- Buttons -->
             <div class="edit-form-actions">
@@ -164,7 +187,7 @@
                 </button>
 
                 <a
-                    href="{{ url_for('view_entry', entry_id=entry[0]) }}"
+                    href="{{ url_for('view_entry', entry_id=entry["id"]) }}"
                     class="edit-cancel-button"
                 >
                     Cancel

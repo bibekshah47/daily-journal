@@ -2339,3 +2339,64 @@ html {
     fill: #f5c542;
     stroke: #b8860b;
 }
+
+/* Optional daily self-reflection */
+.daily-reflection,
+.saved-reflection {
+    border: 1px solid #e2e2e2;
+    border-radius: 9px;
+    background: #fff;
+    padding: 20px;
+}
+.reflection-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0;
+    color: #333;
+    font-size: 17px;
+    font-weight: 600;
+}
+.reflection-header h2 svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    color: #777;
+}
+.reflection-header p {
+    margin: 10px 0 0;
+    color: #888;
+    font-size: 13px;
+    line-height: 1.6;
+}
+.reflection-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    margin-top: 24px;
+}
+.daily-reflection textarea {
+    height: 100px;
+    min-height: 100px;
+}
+.saved-reflection {
+    margin-top: 32px;
+}
+.saved-reflection h2 {
+    margin: 0 0 24px;
+    font-size: 19px;
+    color: #292929;
+}
+.saved-reflection h3 {
+    font-size: 14px;
+    color: #333;
+    margin: 22px 0 8px;
+}
+.reflection-answer {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.8;
+    font-size: 14px;
+    color: #555;
+    margin: 0;
+}

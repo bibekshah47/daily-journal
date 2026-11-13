@@ -8,33 +8,19 @@ from datetime import date, datetime, timedelta
 # Import SQLite to store journal entries
 import sqlite3
 import calendar
+import os
+from database import initialize_database
 
 
 # Create the Flask application
 app = Flask(__name__)
 
 
-# Add favorite support to the existing database
-def setup_favorites():
-    connection = sqlite3.connect("journal.db")
-    cursor = connection.cursor()
+# Allow isolated databases for testing; normal startup upgrades journal.db.
+app.config["DATABASE"] = os.environ.get("JOURNAL_DATABASE", "journal.db")
+initialize_database(app.config["DATABASE"])
 
-    # Check which columns already exist
-    cursor.execute("PRAGMA table_info(entries)")
-    columns = [row[1] for row in cursor.fetchall()]
-
-    # Add the column only if it doesn't exist
-    if "is_favorite" not in columns:
-        cursor.execute("""
-            ALTER TABLE entries
-            ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0
-        """)
-
-    connection.commit()
-    connection.close()
-
-
-setup_favorites()
+REFLECTION_FIELDS = ("went_well", "went_wrong", "improve_tomorrow")
 
 
 # Home Dashboard
@@ -54,7 +40,7 @@ def home():
         greeting = "Good evening"
 
     # Connect to SQLite
-    connection = sqlite3.connect("journal.db")
+    connection = sqlite3.connect(app.config["DATABASE"])
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
@@ -150,7 +136,7 @@ def home():
 def delete_entry(entry_id):
 
     # Connect to the database
-    connection = sqlite3.connect("journal.db")
+    connection = sqlite3.connect(app.config["DATABASE"])
     cursor = connection.cursor()
 
     # Delete the entry with the matching ID
@@ -172,7 +158,8 @@ def delete_entry(entry_id):
 def edit_entry(entry_id):
 
     # Connect to the database
-    connection = sqlite3.connect("journal.db")
+    connection = sqlite3.connect(app.config["DATABASE"])
+    connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
     # Check whether the user submitted the edit form
@@ -182,6 +169,8 @@ def edit_entry(entry_id):
         updated_content = request.form.get("journal")
         updated_mood = request.form.get("mood")
         updated_title = request.form.get("title", "").strip()
+        reflections = {field: request.form.get(field, "").strip()
+                       for field in REFLECTION_FIELDS}
 
 
         # Make sure the updated journal text is not empty
@@ -191,10 +180,12 @@ def edit_entry(entry_id):
             cursor.execute(
                 """
                 UPDATE entries
-                SET content = ?, mood = ?, title = ?
+                SET content = ?, mood = ?, title = ?,
+                    went_well = ?, went_wrong = ?, improve_tomorrow = ?
                 WHERE id = ?
                 """,
-                (updated_content, updated_mood, updated_title, entry_id) 
+                (updated_content, updated_mood, updated_title,
+                 *(reflections[field] for field in REFLECTION_FIELDS), entry_id)
             )
 
             # Save the updated entry
@@ -217,7 +208,14 @@ def edit_entry(entry_id):
     if entry is None:
         return "Journal entry not found", 404
 
-    # Display the edit page
+    # Keep every submitted field when validation fails.
+    if request.method == "POST":
+        entry = dict(entry)
+        entry.update(title=updated_title, content=updated_content or "",
+                     mood=updated_mood, **reflections)
+        return render_template("edit.html", entry=entry,
+                               error="Please write something before saving."), 400
+
     return render_template("edit.html", entry=entry)
 
 
@@ -225,7 +223,7 @@ def edit_entry(entry_id):
 @app.route("/favorite/<int:entry_id>", methods=["POST"])
 def toggle_favorite(entry_id):
 
-    connection = sqlite3.connect("journal.db")
+    connection = sqlite3.connect(app.config["DATABASE"])
     cursor = connection.cursor()
 
     # Toggle the favorite value between 0 and 1
@@ -312,7 +310,7 @@ def history():
         next_month = f"{current_year}-{current_month + 1:02d}"
 
     # Connect to SQLite
-    connection = sqlite3.connect("journal.db")
+    connection = sqlite3.connect(app.config["DATABASE"])
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
@@ -396,7 +394,10 @@ def history():
 def view_entry(entry_id):
 
     # Connect to the database
-    connection = sqlite3.connect("journal.db")
+    connection = sqlite3.connect(app.config["DATABASE"])
+    cursor = connection.cursor()
+
+    connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
     # Find the journal entry using its ID
@@ -426,6 +427,8 @@ def write_journal():
         title = request.form.get("title", "").strip()
         mood = request.form.get("mood", "").strip()
         content = request.form.get("journal", "").strip()
+        reflections = {field: request.form.get(field, "").strip()
+                       for field in REFLECTION_FIELDS}
 
         # Prevent empty journal entries
         if not content:
@@ -434,22 +437,25 @@ def write_journal():
                 error="Please write something before saving.",
                 title=title,
                 mood=mood,
-                content=content
+                content=content,
+                **reflections
             ), 400
 
         # Record the creation date and time
         created_at = datetime.now().isoformat()
 
         # Connect to SQLite
-        connection = sqlite3.connect("journal.db")
+        connection = sqlite3.connect(app.config["DATABASE"])
         cursor = connection.cursor()
 
         # Save the journal entry
         cursor.execute("""
             INSERT INTO entries
-                (title, content, mood, created_at)
-            VALUES (?, ?, ?, ?)
-        """, (title, content, mood, created_at))
+                (title, content, mood, created_at,
+                 went_well, went_wrong, improve_tomorrow)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (title, content, mood, created_at,
+              *(reflections[field] for field in REFLECTION_FIELDS)))
 
         # Get the ID of the newly saved entry
         entry_id = cursor.lastrowid
@@ -459,7 +465,7 @@ def write_journal():
 
         # Open the newly created journal entry
         return redirect(
-            url_for("view_entry", entry_id=entry_id)
+            url_for("view_entry", entry_id=entry_id, saved="1")
         )
 
     # Display an empty writing form
@@ -468,7 +474,8 @@ def write_journal():
         error=None,
         title="",
         mood="",
-        content=""
+        content="",
+        **{field: "" for field in REFLECTION_FIELDS}
     )
 
 

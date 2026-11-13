@@ -7,8 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>
-        {% if entry[4] %}
-            {{ entry[4] }}
+        {% if entry["title"] %}
+            {{ entry["title"] }}
         {% else %}
             Journal Entry
         {% endif %}
@@ -73,10 +73,10 @@
 
         <!-- Journal Title -->
         <h1 class="entry-page-title">
-            {% if entry[4] %}
-                {{ entry[4] }}
+            {% if entry["title"] %}
+                {{ entry["title"] }}
             {% else %}
-                {{ entry[2][:10] }}
+                {{ entry["created_at"][:10] }}
             {% endif %}
         </h1>
 
@@ -86,14 +86,14 @@
             <!-- Date -->
             <div class="entry-meta-item">
                 <i data-lucide="calendar-days"></i>
-                <span>{{ entry[2][:10] }}</span>
+                <span>{{ entry["created_at"][:10] }}</span>
             </div>
 
             <!-- Mood -->
-            {% if entry[3] %}
+            {% if entry["mood"] %}
                 <div class="entry-meta-item">
                     <i data-lucide="smile"></i>
-                    <span>{{ entry[3] }}</span>
+                    <span>{{ entry["mood"] }}</span>
                 </div>
             {% endif %}
 
@@ -102,11 +102,29 @@
         <hr class="entry-page-divider">
 
         <!-- Full Journal Content -->
-        <div class="full-entry-content">{{ entry[1] }}</div>
+        <div class="full-entry-content">{{ entry["content"] }}</div>
+
+        {% if entry.went_well or entry.went_wrong or entry.improve_tomorrow %}
+        <section class="saved-reflection" aria-labelledby="reflection-heading">
+            <h2 id="reflection-heading">Daily Reflection</h2>
+            {% if entry.went_well %}
+            <h3>What went well today?</h3>
+            <p class="reflection-answer">{{ entry.went_well }}</p>
+            {% endif %}
+            {% if entry.went_wrong %}
+            <h3>What didn't go well today?</h3>
+            <p class="reflection-answer">{{ entry.went_wrong }}</p>
+            {% endif %}
+            {% if entry.improve_tomorrow %}
+            <h3>What can I improve tomorrow?</h3>
+            <p class="reflection-answer">{{ entry.improve_tomorrow }}</p>
+            {% endif %}
+        </section>
+        {% endif %}
 
         <!-- Edit Entry -->
         <div class="entry-page-actions">
-            <a href="{{ url_for('edit_entry', entry_id=entry[0]) }}"
+            <a href="{{ url_for('edit_entry', entry_id=entry["id"]) }}"
                class="entry-edit-button">
                 <i data-lucide="pencil"></i>
                 Edit Entry
@@ -114,6 +132,19 @@
         </div>
 
     </main>
+
+    {% if request.args.get('saved') == '1' %}
+    <script>
+        try {
+            if (sessionStorage.getItem("my-journal-save-pending") === "true") {
+                localStorage.removeItem("my-journal-new-entry-draft");
+                sessionStorage.removeItem("my-journal-save-pending");
+            }
+        } catch (error) {
+            console.error("Could not clear the saved draft", error);
+        }
+    </script>
+    {% endif %}
 
     <!-- Initialize Lucide Icons -->
     <script>
