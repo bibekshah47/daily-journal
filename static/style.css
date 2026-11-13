@@ -1670,3 +1670,206 @@ html {
         flex-wrap: wrap;
     }
 }
+
+
+/* ======================================
+   WRITE JOURNAL PAGE
+====================================== */
+
+.write-page {
+    width: min(100% - 48px, 760px);
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: 55px;
+    padding-bottom: 90px;
+    box-sizing: border-box;
+}
+
+/* Header */
+
+.write-header {
+    margin-bottom: 40px;
+}
+
+.write-header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    background: #eeeeec;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.write-header-icon svg {
+    width: 23px;
+    height: 23px;
+    color: #444;
+}
+
+.write-header h1 {
+    font-size: 34px;
+    font-weight: 700;
+    color: #242424;
+    margin: 0 0 12px;
+}
+
+.write-header p {
+    color: #888;
+    font-size: 14px;
+    margin: 0;
+}
+
+/* Form */
+
+.write-form {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.write-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+}
+
+.write-form-group label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+}
+
+.write-optional {
+    font-size: 12px;
+    color: #999;
+    font-weight: 400;
+}
+
+.write-form-group input,
+.write-form-group select,
+.write-form-group textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px 16px;
+    border: 1px solid #e2e2e2;
+    border-radius: 9px;
+    background: #fff;
+    color: #242424;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.write-form-group input:focus,
+.write-form-group select:focus,
+.write-form-group textarea:focus {
+    border-color: #999;
+}
+
+.write-form-group select {
+    max-width: 230px;
+    cursor: pointer;
+}
+
+.write-form-group textarea {
+    min-height: 340px;
+    line-height: 1.8;
+    resize: vertical;
+}
+
+/* Word count */
+
+.write-word-count {
+    display: flex;
+    justify-content: flex-end;
+    color: #999;
+    font-size: 12px;
+}
+
+/* Actions */
+
+.write-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.write-save-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #242424;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 22px;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.write-save-button:hover {
+    background: #444;
+}
+
+.write-save-button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.write-save-button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.write-cancel-button {
+    color: #777;
+    text-decoration: none;
+    font-size: 14px;
+    padding: 10px;
+}
+
+.write-cancel-button:hover {
+    color: #242424;
+}
+
+/* Error */
+
+.write-error {
+    padding: 14px 18px;
+    background: #fff2f2;
+    color: #a52a2a;
+    border: 1px solid #f1d1d1;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 25px;
+}
+
+/* Mobile */
+
+@media (max-width: 700px) {
+    .write-page {
+        width: auto;
+        max-width: none;
+        margin-left: 0;
+        margin-right: 0;
+        padding: 30px 20px 60px;
+    }
+
+    .write-header h1 {
+        font-size: 28px;
+    }
+
+    .write-form-group textarea {
+        min-height: 250px;
+    }
+
+    .write-actions {
+        flex-wrap: wrap;
+    }
+}

@@ -1,0 +1,242 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Write Journal | My Journal</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+</head>
+
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+
+        <div class="sidebar-header">
+            <i data-lucide="book-open"></i>
+            <span>My Journal</span>
+        </div>
+
+        <nav class="sidebar-nav">
+
+            <a href="/#home" class="sidebar-link">
+                <i data-lucide="house"></i>
+                <span>Home</span>
+            </a>
+
+            <a href="{{ url_for('write_journal') }}"
+               class="sidebar-link active">
+                <i data-lucide="square-pen"></i>
+                <span>Write Journal</span>
+            </a>
+
+            <a href="{{ url_for('history') }}"
+               class="sidebar-link">
+                <i data-lucide="calendar-days"></i>
+                <span>Journal History</span>
+            </a>
+
+            <a href="/#journal-insights" class="sidebar-link">
+                <i data-lucide="chart-no-axes-column"></i>
+                <span>Insights</span>
+            </a>
+
+        </nav>
+
+    </aside>
+
+    <!-- Main Content -->
+    <main class="container write-page">
+
+        <!-- Page Header -->
+        <header class="write-header">
+
+            <div class="write-header-icon">
+                <i data-lucide="square-pen"></i>
+            </div>
+
+            <h1>Write Journal</h1>
+
+            <p>
+                A little space for your thoughts.
+            </p>
+
+        </header>
+
+        <!-- Error Message -->
+        {% if error %}
+            <div class="write-error">
+                {{ error }}
+            </div>
+        {% endif %}
+
+        <!-- Journal Form -->
+        <form
+            method="POST"
+            action="{{ url_for('write_journal') }}"
+            class="write-form"
+            id="write-form"
+        >
+
+            <!-- Title -->
+            <div class="write-form-group">
+
+                <label for="title">
+                    Journal Title
+                    <span class="write-optional">
+                        (Optional)
+                    </span>
+                </label>
+
+                <input
+                    type="text"
+                    id="title"
+                    name="title"
+                    placeholder="Give today a title..."
+                    value="{{ title }}"
+                >
+
+            </div>
+
+            <!-- Mood -->
+            <div class="write-form-group">
+
+                <label for="mood">
+                    How are you feeling today?
+                </label>
+
+                <select id="mood" name="mood">
+
+                    <option value="">
+                        Select a mood
+                    </option>
+
+                    <option value="Happy"
+                        {% if mood == "Happy" %}selected{% endif %}>
+                        😊 Happy
+                    </option>
+
+                    <option value="Excited"
+                        {% if mood == "Excited" %}selected{% endif %}>
+                        🤩 Excited
+                    </option>
+
+                    <option value="Neutral"
+                        {% if mood == "Neutral" %}selected{% endif %}>
+                        😐 Neutral
+                    </option>
+
+                    <option value="Sad"
+                        {% if mood == "Sad" %}selected{% endif %}>
+                        😔 Sad
+                    </option>
+
+                    <option value="Stressed"
+                        {% if mood == "Stressed" %}selected{% endif %}>
+                        😣 Stressed
+                    </option>
+
+                </select>
+
+            </div>
+
+            <!-- Journal Content -->
+            <div class="write-form-group">
+
+                <label for="journal">
+                    Your Journal Entry
+                </label>
+
+                <textarea
+                    id="journal"
+                    name="journal"
+                    rows="14"
+                    placeholder="What's on your mind today?"
+                    required
+                >{{ content }}</textarea>
+
+                <div class="write-word-count">
+                    <span id="word-count">
+                        0 words
+                    </span>
+                </div>
+
+            </div>
+
+            <!-- Actions -->
+            <div class="write-actions">
+
+                <button
+                    type="submit"
+                    class="write-save-button"
+                    id="save-button"
+                >
+                    <i data-lucide="check"></i>
+                    Save Journal
+                </button>
+
+                <a href="{{ url_for('history') }}"
+                   class="write-cancel-button">
+                    Cancel
+                </a>
+
+            </div>
+
+        </form>
+
+    </main>
+
+    <!-- JavaScript -->
+    <script>
+        lucide.createIcons();
+
+        const journalTextarea =
+            document.getElementById("journal");
+
+        const wordCount =
+            document.getElementById("word-count");
+
+        const writeForm =
+            document.getElementById("write-form");
+
+        const saveButton =
+            document.getElementById("save-button");
+
+        function updateWordCount() {
+            const text = journalTextarea.value.trim();
+
+            const count = text
+                ? text.split(/\s+/).length
+                : 0;
+
+            wordCount.textContent =
+                count + (count === 1 ? " word" : " words");
+        }
+
+        journalTextarea.addEventListener(
+            "input",
+            updateWordCount
+        );
+
+        writeForm.addEventListener("submit", function () {
+            if (!writeForm.checkValidity()) {
+                return;
+            }
+
+            saveButton.disabled = true;
+            saveButton.textContent = "Saving...";
+        });
+
+        updateWordCount();
+    </script>
+
+</body>
+</html>

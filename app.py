@@ -571,6 +571,62 @@ def view_entry(entry_id):
     return render_template("entry.html", entry=entry)
 
 
+# Dedicated Write Journal page
+@app.route("/write", methods=["GET", "POST"])
+def write_journal():
+
+    # When the user submits the journal form
+    if request.method == "POST":
+
+        title = request.form.get("title", "").strip()
+        mood = request.form.get("mood", "").strip()
+        content = request.form.get("journal", "").strip()
+
+        # Prevent empty journal entries
+        if not content:
+            return render_template(
+                "write.html",
+                error="Please write something before saving.",
+                title=title,
+                mood=mood,
+                content=content
+            ), 400
+
+        # Record the creation date and time
+        created_at = datetime.now().isoformat()
+
+        # Connect to SQLite
+        connection = sqlite3.connect("journal.db")
+        cursor = connection.cursor()
+
+        # Save the journal entry
+        cursor.execute("""
+            INSERT INTO entries
+                (title, content, mood, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (title, content, mood, created_at))
+
+        # Get the ID of the newly saved entry
+        entry_id = cursor.lastrowid
+
+        connection.commit()
+        connection.close()
+
+        # Open the newly created journal entry
+        return redirect(
+            url_for("view_entry", entry_id=entry_id)
+        )
+
+    # Display an empty writing form
+    return render_template(
+        "write.html",
+        error=None,
+        title="",
+        mood="",
+        content=""
+    )
+
+
 # Start the Flask development server
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
