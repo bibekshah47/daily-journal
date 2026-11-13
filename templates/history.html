@@ -27,7 +27,7 @@
 
         <nav class="sidebar-nav">
 
-            <a href="/#home" class="sidebar-link">
+            <a href="{{ url_for('home') }}" class="sidebar-link">
                 <i data-lucide="house"></i>
                 <span>Home</span>
             </a>
@@ -43,7 +43,7 @@
                 <span>Journal History</span>
             </a>
 
-            <a href="/#dashboard-stats" class="sidebar-link">
+            <a href="{{ url_for('home') }}#dashboard-stats" class="sidebar-link">
                 <i data-lucide="chart-no-axes-column"></i>
                 <span>Insights</span>
             </a>
@@ -82,7 +82,7 @@
 
             <div class="history-calendar-navigation">
 
-                <a href="{{ url_for('history', month=previous_month) }}"
+                <a href="{{ url_for('history', month=previous_month, favorites='1' if favorites_only else '') }}"
                    aria-label="Previous month">
                     <i data-lucide="chevron-left"></i>
                 </a>
@@ -91,7 +91,7 @@
                     {{ displayed_month.strftime("%B %Y") }}
                 </h3>
 
-                <a href="{{ url_for('history', month=next_month) }}"
+                <a href="{{ url_for('history', month=next_month, favorites='1' if favorites_only else '') }}"
                    aria-label="Next month">
                     <i data-lucide="chevron-right"></i>
                 </a>
@@ -118,7 +118,8 @@
                         <a
                             href="{{ url_for('history',
                                 month=day.strftime('%Y-%m'),
-                                filter_date=day.isoformat()
+                                filter_date=day.isoformat(),
+                                favorites='1' if favorites_only else ''
                             ) }}#journal-results"
 
                             class="history-calendar-day
@@ -171,12 +172,28 @@
 
             </div>
 
+            <!-- All / Favorites filter -->
+            <div class="favorites-filters" aria-label="Journal entry filters">
+                <a class="favorites-filter {% if not favorites_only %}selected{% endif %}"
+                   href="{{ url_for('history', search=search_query, filter_date=filter_date, month=displayed_month.strftime('%Y-%m')) }}#journal-results">
+                    All Entries
+                </a>
+                <a class="favorites-filter {% if favorites_only %}selected{% endif %}"
+                   href="{{ url_for('history', search=search_query, filter_date=filter_date, month=displayed_month.strftime('%Y-%m'), favorites='1') }}#journal-results">
+                    <i data-lucide="star"></i> Favorites
+                </a>
+            </div>
+
             <!-- Search -->
             <form
                 action="{{ url_for('history') }}#journal-results"
                 method="GET"
                 class="history-filter-form"
             >
+
+                {% if favorites_only %}
+                    <input type="hidden" name="favorites" value="1">
+                {% endif %}
 
                 <div class="history-search-field">
 
@@ -261,6 +278,24 @@
 
                         <div class="history-card-actions">
 
+                            <form action="{{ url_for('toggle_favorite', entry_id=entry.id) }}"
+                                  method="POST" class="history-favorite-form">
+                                <input type="hidden" name="search" value="{{ search_query }}">
+                                <input type="hidden" name="filter_date" value="{{ filter_date }}">
+                                <input type="hidden" name="month" value="{{ displayed_month.strftime('%Y-%m') }}">
+                                {% if favorites_only %}
+                                    <input type="hidden" name="favorites" value="1">
+                                {% endif %}
+                                <button type="submit"
+                                        class="history-action-link favorite-button {% if entry.is_favorite %}is-favorite{% endif %}"
+                                        aria-label="{{ 'Remove from favorites' if entry.is_favorite else 'Add to favorites' }}"
+                                        title="{{ 'Remove from favorites' if entry.is_favorite else 'Add to favorites' }}">
+                                    <i data-lucide="star"></i>
+                                    Favorite
+                                </button>
+                            </form>
+
+
                             <a
                                 href="{{ url_for('view_entry', entry_id=entry.id) }}"
                                 class="history-action-link"
@@ -307,7 +342,9 @@
                         <h3>No journal entries found</h3>
 
                         <p>
-                            {% if search_query or filter_date %}
+                            {% if favorites_only %}
+                                No favorites match your filters. Star an entry in All Entries to save it here.
+                            {% elif search_query or filter_date %}
                                 Try changing your search or
                                 clearing your filters.
                             {% else %}
@@ -316,7 +353,7 @@
                             {% endif %}
                         </p>
 
-                        {% if search_query or filter_date %}
+                        {% if favorites_only or search_query or filter_date %}
 
                             <a href="{{ url_for('history') }}"
                                class="history-empty-link">
@@ -325,7 +362,7 @@
 
                         {% else %}
 
-                            <a href="/#journal-form"
+                            <a href="{{ url_for('write_journal') }}"
                                class="history-empty-link">
                                 Write Your First Entry
                             </a>

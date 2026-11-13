@@ -14,6 +14,28 @@ import calendar
 app = Flask(__name__)
 
 
+# Add favorite support to the existing database
+def setup_favorites():
+    connection = sqlite3.connect("journal.db")
+    cursor = connection.cursor()
+
+    # Check which columns already exist
+    cursor.execute("PRAGMA table_info(entries)")
+    columns = [row[1] for row in cursor.fetchall()]
+
+    # Add the column only if it doesn't exist
+    if "is_favorite" not in columns:
+        cursor.execute("""
+            ALTER TABLE entries
+            ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0
+        """)
+
+    connection.commit()
+    connection.close()
+
+
+setup_favorites()
+
 
 # Home Dashboard
 @app.route("/")
@@ -199,6 +221,45 @@ def edit_entry(entry_id):
     return render_template("edit.html", entry=entry)
 
 
+# Favorite or unfavorite a journal entry
+@app.route("/favorite/<int:entry_id>", methods=["POST"])
+def toggle_favorite(entry_id):
+
+    connection = sqlite3.connect("journal.db")
+    cursor = connection.cursor()
+
+    # Toggle the favorite value between 0 and 1
+    cursor.execute("""
+        UPDATE entries
+        SET is_favorite = CASE
+            WHEN is_favorite = 1 THEN 0
+            ELSE 1
+        END
+        WHERE id = ?
+    """, (entry_id,))
+
+    connection.commit()
+    connection.close()
+
+    # Return to Journal History
+    # Preserve the active search, date and favorites filters
+    params = {
+        "search": request.form.get("search", ""),
+        "filter_date": request.form.get("filter_date", ""),
+        "month": request.form.get("month", ""),
+        "favorites": request.form.get("favorites", "")
+    }
+
+    params = {
+        key: value
+        for key, value in params.items()
+        if value
+    }
+
+    return redirect(
+        url_for("history", **params) + "#journal-results"
+    )
+
 
 @app.route("/history")
 def history():
@@ -208,6 +269,7 @@ def history():
     search_query = request.args.get("search", "").strip()
     filter_date = request.args.get("filter_date", "").strip()
     selected_month = request.args.get("month", "").strip()
+    favorites_only = request.args.get("favorites", "") == "1"
 
     # Validate the selected date
     if filter_date:
@@ -269,6 +331,10 @@ def history():
     query = "SELECT * FROM entries WHERE 1=1"
     parameters = []
 
+        # Show only favorite journals when requested
+    if favorites_only:
+        query += " AND is_favorite = 1"
+
     if search_query:
         query += " AND (title LIKE ? OR content LIKE ?)"
         keyword = f"%{search_query}%"
@@ -303,7 +369,8 @@ def history():
             "content": row["content"],
             "mood": row["mood"],
             "date": created_at.strftime("%B %d, %Y"),
-            "time": created_at.strftime("%I:%M %p")
+            "time": created_at.strftime("%I:%M %p"),
+            "is_favorite": row["is_favorite"]
         })
 
     return render_template(
@@ -317,7 +384,9 @@ def history():
         calendar_weeks=calendar_weeks,
         previous_month=previous_month,
         next_month=next_month,
-        calendar_entry_dates=calendar_entry_dates
+        calendar_entry_dates=calendar_entry_dates,
+        favorites_only=favorites_only,
+
     )
 
 

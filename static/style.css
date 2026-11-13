@@ -2193,3 +2193,149 @@ html {
     }
 
 }
+
+
+/* ==================================
+   FAVORITE JOURNALS
+================================== */
+
+/* All Entries / Favorites filter */
+
+.favorites-filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.favorites-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+
+    padding: 9px 15px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+
+    color: #6b7280;
+    background: #ffffff;
+
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+
+    transition: 0.2s;
+}
+
+.favorites-filter:hover {
+    background: #f9fafb;
+    color: #111827;
+}
+
+.favorites-filter.selected {
+    background: #f3f4f6;
+    color: #111827;
+    border-color: #d1d5db;
+}
+
+.favorites-filter svg {
+    width: 15px;
+    height: 15px;
+}
+
+
+/* Favorite button */
+
+.favorite-form {
+    display: inline-flex;
+    margin: 0;
+}
+
+.favorite-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    padding: 8px 10px;
+
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+
+    color: #6b7280;
+    font-size: 13px;
+
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.favorite-button:hover {
+    background: #f9fafb;
+    color: #111827;
+}
+
+.favorite-button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.favorite-button.is-favorite {
+    color: #b8860b;
+}
+
+.favorite-button.is-favorite svg {
+    fill: #f5c542;
+    stroke: #b8860b;
+}
+
+
+/* All Entries and Favorites Filters */
+
+.favorites-filters {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.favorites-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+
+    padding: 10px 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+
+    background: #ffffff;
+    color: #6b7280;
+
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+
+    transition: 0.2s;
+}
+
+.favorites-filter:hover {
+    background: #f9fafb;
+    color: #111827;
+    text-decoration: none;
+}
+
+.favorites-filter.selected {
+    background: #f3f4f6;
+    color: #111827;
+    border-color: #d1d5db;
+    font-weight: 600;
+}
+
+.favorites-filter svg {
+    width: 15px;
+    height: 15px;
+}
+
+.favorites-filter.selected svg {
+    fill: #f5c542;
+    stroke: #b8860b;
+}
