@@ -1,6 +1,7 @@
 
 # Import Flask tools for creating pages and handling forms
-from flask import Flask, render_template, request, redirect, url_for
+from flask import (Flask, render_template, request, redirect, url_for,
+                   flash, abort)
 
 # Import date and time tools
 from datetime import date, datetime, timedelta
@@ -9,6 +10,7 @@ from datetime import date, datetime, timedelta
 import sqlite3
 import calendar
 import os
+import secrets
 from database import initialize_database
 from rich_text import prepare_content, safe_journal_html
 from journal_insights import get_journal_stats
@@ -16,6 +18,10 @@ from journal_insights import get_journal_stats
 
 # Create the Flask application
 app = Flask(__name__)
+
+# Flask needs a secret key to show one-time messages ("Entry saved").
+# Set SECRET_KEY in your environment to keep messages working across restarts.
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(16)
 
 
 # Allow isolated databases for testing and explicit upgrades.
@@ -38,6 +44,93 @@ app.jinja_env.filters["journal_html"] = safe_journal_html
 
 REFLECTION_FIELDS = ("went_well", "went_wrong", "improve_tomorrow")
 
+# One place to define moods. Templates use this for the mood picker,
+# the colored calendar and the mood badges, so they always match.
+MOODS = [
+    {"name": "Happy", "emoji": "😊", "key": "happy"},
+    {"name": "Excited", "emoji": "🤩", "key": "excited"},
+    {"name": "Neutral", "emoji": "😐", "key": "neutral"},
+    {"name": "Sad", "emoji": "😔", "key": "sad"},
+    {"name": "Stressed", "emoji": "😣", "key": "stressed"},
+]
+MOOD_LOOKUP = {mood["name"]: mood for mood in MOODS}
+
+# A different gentle prompt each day for when the page is blank.
+WRITING_PROMPTS = [
+    "What's one thing from today you want to remember?",
+    "What took up most of your attention today?",
+    "Who made your day a little better?",
+    "What are you looking forward to this week?",
+    "What drained your energy today, and what gave you some back?",
+    "What did you learn today, even something small?",
+    "If today had a title, what would it be?",
+    "What's something you're proud of lately?",
+    "What's on your mind right now?",
+    "What would make tomorrow a good day?",
+]
+
+
+def parse_timestamp(value):
+    """Turn a stored ISO timestamp into a datetime (or None if it's broken)."""
+    try:
+        return datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def friendly_date(value, with_weekday=False):
+    moment = parse_timestamp(value) if isinstance(value, str) else value
+    if not moment:
+        return value or ""
+    pattern = "%A, %B %d, %Y" if with_weekday else "%B %d, %Y"
+    # Remove the leading zero from the day: "November 03" -> "November 3"
+    return moment.strftime(pattern).replace(" 0", " ")
+
+
+def friendly_time(value):
+    moment = parse_timestamp(value) if isinstance(value, str) else value
+    if not moment:
+        return ""
+    return moment.strftime("%I:%M %p").lstrip("0")
+
+
+app.jinja_env.filters["friendly_date"] = friendly_date
+app.jinja_env.filters["friendly_time"] = friendly_time
+
+
+@app.context_processor
+def shared_template_values():
+    """Values every template can use."""
+    return {"moods": MOODS, "mood_lookup": MOOD_LOOKUP}
+
+
+def get_connection():
+    connection = sqlite3.connect(app.config["DATABASE"])
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def entry_summary(row):
+    """Format a database row for the entry lists."""
+    created_at = parse_timestamp(row["created_at"])
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "content": row["content"],
+        "mood": row["mood"],
+        "date": friendly_date(created_at) if created_at else row["created_at"],
+        "time": friendly_time(created_at),
+        "is_favorite": row["is_favorite"],
+    }
+
+
+def safe_next_url(fallback):
+    """Only follow redirects that stay inside this app."""
+    target = request.form.get("next", "")
+    if target.startswith("/") and not target.startswith("//"):
+        return target
+    return fallback
+
 
 # Home Dashboard
 @app.route("/")
@@ -55,46 +148,49 @@ def home():
     else:
         greeting = "Good evening"
 
-    # Connect to SQLite
-    connection = sqlite3.connect(app.config["DATABASE"])
-    connection.row_factory = sqlite3.Row
-    cursor = connection.cursor()
-
+    connection = get_connection()
     stats = get_journal_stats(connection, today)
 
-    # 4. Get the three most recent journal entries
-    cursor.execute("""
-        SELECT id, title, content, mood, created_at
+    # The three most recent journal entries
+    rows = connection.execute("""
+        SELECT *
         FROM entries
         ORDER BY created_at DESC, id DESC
         LIMIT 3
-    """)
+    """).fetchall()
+    recent_entries = [entry_summary(row) for row in rows]
 
-    rows = cursor.fetchall()
+    # Did the user already write today? Link to that entry if so.
+    today_entry = connection.execute("""
+        SELECT id, title FROM entries
+        WHERE date(created_at) = ?
+        ORDER BY created_at DESC LIMIT 1
+    """, (today.isoformat(),)).fetchone()
 
-    recent_entries = []
+    # Moods for the last 14 days (latest entry of each day)
+    start = today - timedelta(days=13)
+    mood_rows = connection.execute("""
+        SELECT date(created_at) AS day, mood
+        FROM entries
+        WHERE date(created_at) >= ?
+        ORDER BY created_at
+    """, (start.isoformat(),)).fetchall()
+    connection.close()
 
-    for row in rows:
-        created_at = datetime.fromisoformat(
-            row["created_at"]
-        )
+    day_moods = {}
+    for row in mood_rows:
+        day_moods[row["day"]] = row["mood"] or ""
 
-        # Use the date as the title if no title was entered
-        entry_title = row["title"]
-
-        if not entry_title:
-            entry_title = created_at.strftime("%B %d, %Y")
-
-        recent_entries.append({
-            "id": row["id"],
-            "title": entry_title,
-            "content": row["content"],
-            "mood": row["mood"],
-            "date": created_at.strftime("%B %d, %Y"),
-            "time": created_at.strftime("%I:%M %p")
+    last_two_weeks = []
+    for offset in range(14):
+        day = start + timedelta(days=offset)
+        last_two_weeks.append({
+            "date": day,
+            "written": day.isoformat() in day_moods,
+            "mood": day_moods.get(day.isoformat(), ""),
         })
 
-    connection.close()
+    prompt = WRITING_PROMPTS[today.toordinal() % len(WRITING_PROMPTS)]
 
     # Display the Home Dashboard
     return render_template(
@@ -104,7 +200,10 @@ def home():
         total_entries=stats["total_entries"],
         monthly_entries=stats["monthly_entries"],
         current_streak=stats["current_streak"],
-        recent_entries=recent_entries
+        recent_entries=recent_entries,
+        today_entry=today_entry,
+        last_two_weeks=last_two_weeks,
+        prompt=prompt,
     )
 
 
@@ -113,30 +212,30 @@ def insights():
     connection = sqlite3.connect(app.config["DATABASE"])
     try:
         stats = get_journal_stats(connection)
+        mood_counts = dict(connection.execute(
+            "SELECT mood, COUNT(*) FROM entries WHERE mood IS NOT NULL AND mood != '' GROUP BY mood"
+        ).fetchall())
     finally:
         connection.close()
-    return render_template("insights.html", **stats)
+
+    mood_breakdown = [
+        {**mood, "count": mood_counts.get(mood["name"], 0)} for mood in MOODS
+    ]
+    most_entries = max([mood["count"] for mood in mood_breakdown] + [1])
+    return render_template("insights.html", mood_breakdown=mood_breakdown,
+                           most_mood_entries=most_entries, **stats)
 
 
 # Delete an existing journal entry
 @app.route("/delete/<int:entry_id>", methods=["POST"])
 def delete_entry(entry_id):
 
-    # Connect to the database
     connection = sqlite3.connect(app.config["DATABASE"])
-    cursor = connection.cursor()
-
-    # Delete the entry with the matching ID
-    cursor.execute(
-        "DELETE FROM entries WHERE id = ?",
-        (entry_id,)
-    )
-
-    # Save the deletion and close the connection
+    connection.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
     connection.commit()
     connection.close()
 
-    # Return to the homepage
+    flash("Entry deleted.")
     return redirect(url_for("history"))
 
 
@@ -144,9 +243,7 @@ def delete_entry(entry_id):
 @app.route("/edit/<int:entry_id>", methods=["GET", "POST"])
 def edit_entry(entry_id):
 
-    # Connect to the database
-    connection = sqlite3.connect(app.config["DATABASE"])
-    connection.row_factory = sqlite3.Row
+    connection = get_connection()
     cursor = connection.cursor()
 
     # Check whether the user submitted the edit form
@@ -159,11 +256,9 @@ def edit_entry(entry_id):
         reflections = {field: request.form.get(field, "").strip()
                        for field in REFLECTION_FIELDS}
 
-
         # Make sure the updated journal text is not empty
         if updated_content and updated_content.strip():
 
-            # Update both content and mood in the database
             cursor.execute(
                 """
                 UPDATE entries
@@ -175,26 +270,20 @@ def edit_entry(entry_id):
                  *(reflections[field] for field in REFLECTION_FIELDS), entry_id)
             )
 
-            # Save the updated entry
             connection.commit()
             connection.close()
 
-            # Return to the homepage
+            flash("Changes saved.")
             return redirect(url_for("view_entry", entry_id=entry_id))
 
     # Retrieve the journal entry being edited
-    cursor.execute(
-        "SELECT * FROM entries WHERE id = ?",
-        (entry_id,)
-    )
-
+    cursor.execute("SELECT * FROM entries WHERE id = ?", (entry_id,))
     row = cursor.fetchone()
     entry = dict(row) if row is not None else None
     connection.close()
 
-    # Show an error if the entry does not exist
     if entry is None:
-        return "Journal entry not found", 404
+        abort(404)
 
     # Keep every submitted field when validation fails.
     if request.method == "POST":
@@ -202,7 +291,7 @@ def edit_entry(entry_id):
         entry.update(title=updated_title, content=updated_content or "",
                      mood=updated_mood, content_html=content_html, **reflections)
         return render_template("edit.html", entry=entry,
-                               error="Please write something before saving."), 400
+                               error="Write something in your entry before saving."), 400
 
     return render_template("edit.html", entry=entry)
 
@@ -212,22 +301,14 @@ def edit_entry(entry_id):
 def toggle_favorite(entry_id):
 
     connection = sqlite3.connect(app.config["DATABASE"])
-    cursor = connection.cursor()
-
-    # Toggle the favorite value between 0 and 1
-    cursor.execute("""
+    connection.execute("""
         UPDATE entries
-        SET is_favorite = CASE
-            WHEN is_favorite = 1 THEN 0
-            ELSE 1
-        END
+        SET is_favorite = CASE WHEN is_favorite = 1 THEN 0 ELSE 1 END
         WHERE id = ?
     """, (entry_id,))
-
     connection.commit()
     connection.close()
 
-    # Return to Journal History
     # Preserve the active search, date and favorites filters
     params = {
         "search": request.form.get("search", ""),
@@ -235,16 +316,10 @@ def toggle_favorite(entry_id):
         "month": request.form.get("month", ""),
         "favorites": request.form.get("favorites", "")
     }
+    params = {key: value for key, value in params.items() if value}
 
-    params = {
-        key: value
-        for key, value in params.items()
-        if value
-    }
-
-    return redirect(
-        url_for("history", **params) + "#journal-results"
-    )
+    fallback = url_for("history", **params) + f"#entry-{entry_id}"
+    return redirect(safe_next_url(fallback))
 
 
 @app.route("/history")
@@ -267,13 +342,9 @@ def history():
     # Decide which month the calendar should display
     try:
         if selected_month:
-            displayed_month = datetime.strptime(
-                selected_month, "%Y-%m"
-            ).date()
+            displayed_month = datetime.strptime(selected_month, "%Y-%m").date()
         elif filter_date:
-            displayed_month = date.fromisoformat(
-                filter_date
-            ).replace(day=1)
+            displayed_month = date.fromisoformat(filter_date).replace(day=1)
         else:
             displayed_month = today.replace(day=1)
     except ValueError:
@@ -284,40 +355,32 @@ def history():
 
     # Generate the calendar
     cal = calendar.Calendar(firstweekday=6)
-    calendar_weeks = cal.monthdatescalendar(
-        current_year, current_month
-    )
+    calendar_weeks = cal.monthdatescalendar(current_year, current_month)
 
-    previous_month = (
-        displayed_month - timedelta(days=1)
-    ).strftime("%Y-%m")
-
+    previous_month = (displayed_month - timedelta(days=1)).strftime("%Y-%m")
     if current_month == 12:
         next_month = f"{current_year + 1}-01"
     else:
         next_month = f"{current_year}-{current_month + 1:02d}"
 
-    # Connect to SQLite
-    connection = sqlite3.connect(app.config["DATABASE"])
-    connection.row_factory = sqlite3.Row
+    connection = get_connection()
     cursor = connection.cursor()
 
-    # Get dates that contain journal entries
+    # Dates that contain journal entries, with the mood of the latest one
     cursor.execute("""
-        SELECT DISTINCT date(created_at) AS entry_date
+        SELECT date(created_at) AS entry_date, mood
         FROM entries
+        ORDER BY created_at
     """)
-
-    calendar_entry_dates = {
-        row["entry_date"]
-        for row in cursor.fetchall()
-    }
+    calendar_moods = {}
+    for row in cursor.fetchall():
+        calendar_moods[row["entry_date"]] = row["mood"] or ""
+    calendar_entry_dates = set(calendar_moods)
 
     # Build the journal search query
     query = "SELECT * FROM entries WHERE 1=1"
     parameters = []
 
-        # Show only favorite journals when requested
     if favorites_only:
         query += " AND is_favorite = 1"
 
@@ -335,33 +398,26 @@ def history():
     cursor.execute(query, parameters)
     rows = cursor.fetchall()
 
-    # Count all saved entries
     cursor.execute("SELECT COUNT(*) FROM entries")
     total_entries = cursor.fetchone()[0]
-
     connection.close()
 
-    # Format entries for display
+    # Group entries by month so the list is easier to scan
     entries = []
-
+    groups = []
     for row in rows:
-        created_at = datetime.fromisoformat(
-            row["created_at"]
-        )
-
-        entries.append({
-            "id": row["id"],
-            "title": row["title"],
-            "content": row["content"],
-            "mood": row["mood"],
-            "date": created_at.strftime("%B %d, %Y"),
-            "time": created_at.strftime("%I:%M %p"),
-            "is_favorite": row["is_favorite"]
-        })
+        entry = entry_summary(row)
+        entries.append(entry)
+        created_at = parse_timestamp(row["created_at"])
+        label = created_at.strftime("%B %Y") if created_at else "Other"
+        if not groups or groups[-1]["label"] != label:
+            groups.append({"label": label, "entries": []})
+        groups[-1]["entries"].append(entry)
 
     return render_template(
         "history.html",
         entries=entries,
+        entry_groups=groups,
         total_entries=total_entries,
         search_query=search_query,
         filter_date=filter_date,
@@ -371,39 +427,41 @@ def history():
         previous_month=previous_month,
         next_month=next_month,
         calendar_entry_dates=calendar_entry_dates,
+        calendar_moods=calendar_moods,
         favorites_only=favorites_only,
-
+        today=today,
     )
-
 
 
 # View a single journal entry
 @app.route("/entry/<int:entry_id>")
 def view_entry(entry_id):
 
-    # Connect to the database
-    connection = sqlite3.connect(app.config["DATABASE"])
-    cursor = connection.cursor()
+    connection = get_connection()
+    row = connection.execute(
+        "SELECT * FROM entries WHERE id = ?", (entry_id,)
+    ).fetchone()
 
-    connection.row_factory = sqlite3.Row
-    cursor = connection.cursor()
+    if row is None:
+        connection.close()
+        abort(404)
 
-    # Find the journal entry using its ID
-    cursor.execute(
-        "SELECT * FROM entries WHERE id = ?",
-        (entry_id,)
-    )
+    entry = dict(row)
 
-    row = cursor.fetchone()
-    entry = dict(row) if row is not None else None
+    # Find the next older and newer entries for "previous / next" links
+    older = connection.execute("""
+        SELECT id, title, created_at FROM entries
+        WHERE created_at < ? OR (created_at = ? AND id < ?)
+        ORDER BY created_at DESC, id DESC LIMIT 1
+    """, (entry["created_at"], entry["created_at"], entry_id)).fetchone()
+    newer = connection.execute("""
+        SELECT id, title, created_at FROM entries
+        WHERE created_at > ? OR (created_at = ? AND id > ?)
+        ORDER BY created_at ASC, id ASC LIMIT 1
+    """, (entry["created_at"], entry["created_at"], entry_id)).fetchone()
     connection.close()
 
-    # Show an error if the entry doesn't exist
-    if entry is None:
-        return "Journal entry not found", 404
-
-    # Send the entry to the HTML page
-    return render_template("entry.html", entry=entry)
+    return render_template("entry.html", entry=entry, older=older, newer=newer)
 
 
 # Dedicated Write Journal page
@@ -423,22 +481,19 @@ def write_journal():
         if not content:
             return render_template(
                 "write.html",
-                error="Please write something before saving.",
+                error="Write something in your entry before saving.",
                 title=title,
                 mood=mood,
                 content=content,
                 content_html=content_html,
+                prompt=WRITING_PROMPTS[date.today().toordinal() % len(WRITING_PROMPTS)],
                 **reflections
             ), 400
 
-        # Record the creation date and time
         created_at = datetime.now().isoformat()
 
-        # Connect to SQLite
         connection = sqlite3.connect(app.config["DATABASE"])
         cursor = connection.cursor()
-
-        # Save the journal entry
         cursor.execute("""
             INSERT INTO entries
                 (title, content, mood, created_at, content_html,
@@ -446,17 +501,12 @@ def write_journal():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (title, content, mood, created_at, content_html,
               *(reflections[field] for field in REFLECTION_FIELDS)))
-
-        # Get the ID of the newly saved entry
         entry_id = cursor.lastrowid
-
         connection.commit()
         connection.close()
 
-        # Open the newly created journal entry
-        return redirect(
-            url_for("view_entry", entry_id=entry_id, saved="1")
-        )
+        flash("Entry saved.")
+        return redirect(url_for("view_entry", entry_id=entry_id, saved="1"))
 
     # Display an empty writing form
     return render_template(
@@ -465,8 +515,14 @@ def write_journal():
         title="",
         mood="",
         content="",
+        prompt=WRITING_PROMPTS[date.today().toordinal() % len(WRITING_PROMPTS)],
         **{field: "" for field in REFLECTION_FIELDS}
     )
+
+
+@app.errorhandler(404)
+def page_not_found(error):
+    return render_template("404.html"), 404
 
 
 # Start the Flask development server

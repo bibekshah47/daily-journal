@@ -2,7 +2,13 @@
 
 Flask, SQLite, Jinja templates, and vanilla JavaScript. The main journal body uses
 Quill 2.0.3; titles, moods, and optional Daily Reflection answers remain plain text.
-Quill assets and its license are vendored under `static/vendor/quill/`.
+Quill, Lucide icons and the Literata font are vendored under `static/vendor/`, so
+the app works fully offline. All pages extend `templates/base.html`; shared
+pieces (mood picker, reflection fields, editor) live in `templates/_macros.html`.
+Mood names, emoji and colors are defined once in `MOODS` in `app.py`.
+
+Set `SECRET_KEY` in your environment to keep confirmation messages
+("Entry saved.") working across server restarts.
 
 ## Setup or upgrade
 

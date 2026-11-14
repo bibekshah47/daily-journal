@@ -1,0 +1,100 @@
+{# Small reusable pieces shared by several pages. #}
+
+{% macro mood_badge(mood_name) %}
+{% set mood = mood_lookup.get(mood_name) %}
+{% if mood %}
+<span class="mood-badge mood-{{ mood.key }}">
+    <span aria-hidden="true">{{ mood.emoji }}</span> {{ mood.name }}
+</span>
+{% elif mood_name %}
+<span class="mood-badge">{{ mood_name }}</span>
+{% endif %}
+{% endmacro %}
+
+
+{# Tappable mood chips. A hidden input named "mood" holds the value,
+   so the server and the draft autosave keep working exactly as before. #}
+{% macro mood_picker(current, legend="How are you feeling?") %}
+<fieldset class="mood-picker">
+    <legend>{{ legend }}</legend>
+    <input type="hidden" id="mood" name="mood" value="{{ current or '' }}">
+    <div class="mood-options">
+        {% for mood in moods %}
+        <label class="mood-option mood-{{ mood.key }}">
+            <input type="radio" name="mood_picker" value="{{ mood.name }}"
+                   {% if current == mood.name %}checked{% endif %}>
+            <span class="mood-emoji" aria-hidden="true">{{ mood.emoji }}</span>
+            <span class="mood-name">{{ mood.name }}</span>
+        </label>
+        {% endfor %}
+    </div>
+</fieldset>
+{% endmacro %}
+
+
+{# Reflection questions, folded away unless something is already written. #}
+{% macro reflection_fields(went_well, went_wrong, improve_tomorrow) %}
+<details class="daily-reflection" id="daily-reflection"
+         {% if went_well or went_wrong or improve_tomorrow %}open{% endif %}>
+    <summary>
+        <span class="reflection-summary-text">
+            <span class="reflection-title">Daily reflection</span>
+            <span class="reflection-hint">Three short questions about your day, if you want them.</span>
+        </span>
+        <i data-lucide="chevron-down" aria-hidden="true"></i>
+    </summary>
+    <div class="reflection-fields">
+        <div class="field">
+            <label for="went_well">What went well today?</label>
+            <textarea id="went_well" name="went_well" rows="2" placeholder="A small win, a good moment, something you enjoyed">{{ went_well or '' }}</textarea>
+        </div>
+        <div class="field">
+            <label for="went_wrong">What didn't go well today?</label>
+            <textarea id="went_wrong" name="went_wrong" rows="2" placeholder="A challenge or setback">{{ went_wrong or '' }}</textarea>
+        </div>
+        <div class="field">
+            <label for="improve_tomorrow">What can I improve tomorrow?</label>
+            <textarea id="improve_tomorrow" name="improve_tomorrow" rows="2" placeholder="One small step">{{ improve_tomorrow or '' }}</textarea>
+        </div>
+    </div>
+</details>
+{% endmacro %}
+
+
+{# Script for the mood chips; kept separate from the draft script. #}
+{% macro mood_picker_script() %}
+<script>
+    (function () {
+        const hidden = document.getElementById("mood");
+        const radios = Array.from(document.querySelectorAll('input[name="mood_picker"]'));
+        if (!hidden || !radios.length) return;
+
+        function syncFromHidden() {
+            radios.forEach(function (radio) { radio.checked = radio.value === hidden.value; });
+        }
+        radios.forEach(function (radio) {
+            // Clicking the selected mood again clears it.
+            radio.addEventListener("click", function () {
+                hidden.value = hidden.value === radio.value ? "" : radio.value;
+                syncFromHidden();
+                hidden.dispatchEvent(new Event("change", { bubbles: true }));
+            });
+        });
+        // Draft restore and "Discard draft" change the hidden value directly.
+        hidden.addEventListener("mood-sync", syncFromHidden);
+        syncFromHidden();
+    })();
+</script>
+{% endmacro %}
+
+
+{% macro editor_fields(content, content_html, placeholder) %}
+<div class="field editor-field">
+    <label for="journal" id="journal-label" class="visually-hidden">Your journal entry</label>
+    <textarea id="journal" name="journal" rows="14" placeholder="{{ placeholder }}" required>{{ content or '' }}</textarea>
+    <div id="journal-editor" class="journal-editor" hidden></div>
+    <input type="hidden" name="editor_format" id="editor-format" value="plain">
+    <input type="hidden" name="journal_html" id="journal-html" value="">
+    <template id="initial-journal-html">{% if content_html %}{{ content_html | journal_html }}{% endif %}</template>
+</div>
+{% endmacro %}

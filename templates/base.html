@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📓</text></svg>">
+    <title>{% block title %}My Journal{% endblock %} | My Journal</title>
+    {% block head %}{% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='vendor/lucide/lucide.min.js') }}"></script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    {% set nav_items = [
+        ('home', 'Home', 'house'),
+        ('write_journal', 'Write', 'square-pen'),
+        ('history', 'History', 'calendar-days'),
+        ('insights', 'Insights', 'chart-no-axes-column'),
+    ] %}
+    {% set active = active_page|default('') %}
+
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <!-- Sidebar on wide screens, tab bar on phones (same links) -->
+    <aside class="sidebar">
+        <a class="brand" href="{{ url_for('home') }}">
+            <i data-lucide="book-open" aria-hidden="true"></i>
+            <span>My Journal</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+            {% for endpoint, label, icon in nav_items %}
+            <a href="{{ url_for(endpoint) }}"
+               class="nav-link {% if active == endpoint %}active{% endif %} {% if endpoint == 'write_journal' %}nav-write{% endif %}"
+               {% if active == endpoint %}aria-current="page"{% endif %}>
+                <i data-lucide="{{ icon }}" aria-hidden="true"></i>
+                <span>{{ label }}</span>
+            </a>
+            {% endfor %}
+        </nav>
+        <p class="sidebar-note">
+            <i data-lucide="lock" aria-hidden="true"></i>
+            Stored only on this computer
+        </p>
+    </aside>
+
+    <main id="main" class="main {% block main_class %}{% endblock %}" tabindex="-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="toast-region" role="status" aria-live="polite">
+        {% for message in messages %}
+        <div class="toast">
+            <i data-lucide="check" aria-hidden="true"></i>
+            <span>{{ message }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {% block scripts %}{% endblock %}
+    <script>
+        lucide.createIcons();
+        // Fade out "Entry saved" style messages after a few seconds.
+        setTimeout(function () {
+            document.querySelectorAll(".toast").forEach(function (toast) {
+                toast.classList.add("toast-hide");
+            });
+        }, 3500);
+    </script>
+</body>
+</html>

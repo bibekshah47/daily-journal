@@ -1,159 +1,139 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+{% set active_page = 'history' %}
 
-<!DOCTYPE html>
-<html lang="en">
+{% block title %}{{ entry["title"] or (entry["created_at"] | friendly_date) }}{% endblock %}
+{% block main_class %}entry-page{% endblock %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>
-        {% if entry["title"] %}
-            {{ entry["title"] }}
-        {% else %}
-            Journal Entry
-        {% endif %}
-    </title>
-
-    <!-- Connect CSS -->
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='style.css') }}">
-
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-</head>
-
-<body>
-
-    <!-- Minimal Sidebar Navigation -->
-    <aside class="sidebar">
-
-        <!-- Sidebar Header -->
-        <div class="sidebar-header">
-            <i data-lucide="book-open"></i>
-            <span>My Journal</span>
-        </div>
-
-        <!-- Sidebar Links -->
-        <nav class="sidebar-nav">
-
-            <a href="/#home" class="sidebar-link">
-                <i data-lucide="house"></i>
-                <span>Home</span>
-            </a>
-
-            <a href="{{ url_for('write_journal') }}" class="sidebar-link">
-                <i data-lucide="square-pen"></i>
-                <span>Write Journal</span>
-            </a>
-
-            <a href="{{ url_for('history') }}"
-               class="sidebar-link active">
-                <i data-lucide="calendar-days"></i>
-                <span>Journal History</span>
-            </a>
-
-            <a href="{{ url_for('insights') }}" class="sidebar-link">
-                <i data-lucide="chart-no-axes-column"></i>
-                <span>Insights</span>
-            </a>
-
-        </nav>
-
-    </aside>
-
-    <!-- Main Content -->
-    <main class="container entry-page">
-
-        <!-- Back to History -->
-        <a href="{{ url_for('history') }}"
-           class="entry-back-link">
-            <i data-lucide="arrow-left"></i>
-            Back to Journal History
+{% block content %}
+<div class="entry-toolbar">
+    <a href="{{ url_for('history') }}" class="back-link">
+        <i data-lucide="arrow-left" aria-hidden="true"></i>
+        History
+    </a>
+    <div class="entry-tools">
+        <form action="{{ url_for('toggle_favorite', entry_id=entry['id']) }}" method="POST">
+            <input type="hidden" name="next" value="{{ url_for('view_entry', entry_id=entry['id']) }}">
+            <button type="submit" class="icon-button favorite-button {% if entry['is_favorite'] %}is-favorite{% endif %}"
+                    aria-pressed="{{ 'true' if entry['is_favorite'] else 'false' }}"
+                    aria-label="{{ 'Remove from favorites' if entry['is_favorite'] else 'Add to favorites' }}"
+                    title="{{ 'Remove from favorites' if entry['is_favorite'] else 'Add to favorites' }}">
+                <i data-lucide="star" aria-hidden="true"></i>
+            </button>
+        </form>
+        <a href="{{ url_for('edit_entry', entry_id=entry['id']) }}" class="button button-secondary">
+            <i data-lucide="pencil" aria-hidden="true"></i>
+            Edit
         </a>
+        <button type="button" class="icon-button danger" id="delete-open"
+                aria-label="Delete entry" title="Delete entry">
+            <i data-lucide="trash-2" aria-hidden="true"></i>
+        </button>
+    </div>
+</div>
 
-        <!-- Journal Title -->
-        <h1 class="entry-page-title">
-            {% if entry["title"] %}
-                {{ entry["title"] }}
-            {% else %}
-                {{ entry["created_at"][:10] }}
-            {% endif %}
-        </h1>
+<article class="reading">
+    <header class="reading-header">
+        <p class="reading-date">
+            {{ entry["created_at"] | friendly_date(true) }}
+            <span class="reading-time">at {{ entry["created_at"] | friendly_time }}</span>
+        </p>
+        <h1 class="reading-title">{{ entry["title"] or 'Untitled' }}</h1>
+        {{ ui.mood_badge(entry["mood"]) }}
+    </header>
 
-        <!-- Journal Information -->
-        <div class="entry-page-meta">
-
-            <!-- Date -->
-            <div class="entry-meta-item">
-                <i data-lucide="calendar-days"></i>
-                <span>{{ entry["created_at"][:10] }}</span>
-            </div>
-
-            <!-- Mood -->
-            {% if entry["mood"] %}
-                <div class="entry-meta-item">
-                    <i data-lucide="smile"></i>
-                    <span>{{ entry["mood"] }}</span>
-                </div>
-            {% endif %}
-
-        </div>
-
-        <hr class="entry-page-divider">
-
-        <!-- Full Journal Content -->
-        {% if entry.get('content_html') %}
-        <div class="formatted-entry-content">{{ entry.content_html | journal_html }}</div>
-        {% else %}
-        <div class="full-entry-content">{{ entry["content"] }}</div>
-        {% endif %}
-
-        {% if entry.went_well or entry.went_wrong or entry.improve_tomorrow %}
-        <section class="saved-reflection" aria-labelledby="reflection-heading">
-            <h2 id="reflection-heading">Daily Reflection</h2>
-            {% if entry.went_well %}
-            <h3>What went well today?</h3>
-            <p class="reflection-answer">{{ entry.went_well }}</p>
-            {% endif %}
-            {% if entry.went_wrong %}
-            <h3>What didn't go well today?</h3>
-            <p class="reflection-answer">{{ entry.went_wrong }}</p>
-            {% endif %}
-            {% if entry.improve_tomorrow %}
-            <h3>What can I improve tomorrow?</h3>
-            <p class="reflection-answer">{{ entry.improve_tomorrow }}</p>
-            {% endif %}
-        </section>
-        {% endif %}
-
-        <!-- Edit Entry -->
-        <div class="entry-page-actions">
-            <a href="{{ url_for('edit_entry', entry_id=entry["id"]) }}"
-               class="entry-edit-button">
-                <i data-lucide="pencil"></i>
-                Edit Entry
-            </a>
-        </div>
-
-    </main>
-
-    {% if request.args.get('saved') == '1' %}
-    <script>
-        try {
-            if (sessionStorage.getItem("my-journal-save-pending") === "true") {
-                localStorage.removeItem("my-journal-new-entry-draft");
-                sessionStorage.removeItem("my-journal-save-pending");
-            }
-        } catch (error) {
-            console.error("Could not clear the saved draft", error);
-        }
-    </script>
+    {% if entry.get('content_html') %}
+    <div class="reading-body formatted-entry-content">{{ entry.content_html | journal_html }}</div>
+    {% else %}
+    <div class="reading-body full-entry-content">{{ entry["content"] }}</div>
     {% endif %}
 
-    <!-- Initialize Lucide Icons -->
-    <script>
-        lucide.createIcons();
-    </script>
+    {% if entry.went_well or entry.went_wrong or entry.improve_tomorrow %}
+    <section class="saved-reflection" aria-labelledby="reflection-heading">
+        <h2 id="reflection-heading">Daily reflection</h2>
+        <dl>
+            {% if entry.went_well %}
+            <div class="reflection-item">
+                <dt>What went well today?</dt>
+                <dd class="reflection-answer">{{ entry.went_well }}</dd>
+            </div>
+            {% endif %}
+            {% if entry.went_wrong %}
+            <div class="reflection-item">
+                <dt>What didn't go well today?</dt>
+                <dd class="reflection-answer">{{ entry.went_wrong }}</dd>
+            </div>
+            {% endif %}
+            {% if entry.improve_tomorrow %}
+            <div class="reflection-item">
+                <dt>What can I improve tomorrow?</dt>
+                <dd class="reflection-answer">{{ entry.improve_tomorrow }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+    </section>
+    {% endif %}
+</article>
 
-</body>
-</html>
+<nav class="entry-pager" aria-label="More entries">
+    {% if older %}
+    <a href="{{ url_for('view_entry', entry_id=older['id']) }}" class="pager-link">
+        <span class="pager-direction"><i data-lucide="arrow-left" aria-hidden="true"></i> Older</span>
+        <span class="pager-title">{{ older['title'] or (older['created_at'] | friendly_date) }}</span>
+    </a>
+    {% else %}<span></span>{% endif %}
+    {% if newer %}
+    <a href="{{ url_for('view_entry', entry_id=newer['id']) }}" class="pager-link pager-newer">
+        <span class="pager-direction">Newer <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+        <span class="pager-title">{{ newer['title'] or (newer['created_at'] | friendly_date) }}</span>
+    </a>
+    {% endif %}
+</nav>
+
+<!-- Delete confirmation -->
+<dialog class="dialog" id="delete-dialog" aria-labelledby="delete-title">
+    <form action="{{ url_for('delete_entry', entry_id=entry['id']) }}" method="POST">
+        <h2 id="delete-title">Delete this entry?</h2>
+        <p>“{{ entry["title"] or (entry["created_at"] | friendly_date) }}” will be removed for good. This can't be undone.</p>
+        <div class="dialog-actions">
+            <button type="button" class="button button-quiet" id="delete-cancel" autofocus>Keep it</button>
+            <button type="submit" class="button button-danger">Delete entry</button>
+        </div>
+    </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+{% if request.args.get('saved') == '1' %}
+<script>
+    try {
+        if (sessionStorage.getItem("my-journal-save-pending") === "true") {
+            localStorage.removeItem("my-journal-new-entry-draft");
+            sessionStorage.removeItem("my-journal-save-pending");
+        }
+    } catch (error) {
+        console.error("Could not clear the saved draft", error);
+    }
+</script>
+{% endif %}
+<script>
+    const deleteDialog = document.getElementById("delete-dialog");
+    document.getElementById("delete-open").addEventListener("click", function () {
+        if (deleteDialog.showModal) {
+            deleteDialog.showModal();
+        } else if (confirm("Delete this entry? This can't be undone.")) {
+            deleteDialog.querySelector("form").submit();
+        }
+    });
+    document.getElementById("delete-cancel").addEventListener("click", function () {
+        deleteDialog.close();
+    });
+    // Arrow keys move between older and newer entries.
+    document.addEventListener("keydown", function (event) {
+        if (event.target.closest("input, textarea, [contenteditable]") || deleteDialog.open) return;
+        const link = event.key === "ArrowLeft" ? document.querySelector(".pager-link:not(.pager-newer)")
+                   : event.key === "ArrowRight" ? document.querySelector(".pager-newer") : null;
+        if (link) window.location = link.href;
+    });
+</script>
+{% endblock %}
