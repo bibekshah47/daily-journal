@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Page not found{% endblock %}
+
+{% block content %}
+<div class="empty-state">
+    <i data-lucide="file-question" aria-hidden="true"></i>
+    <h1>This page isn't here</h1>
+    <p>The entry may have been deleted, or the link is wrong.</p>
+    <a href="{{ url_for('history') }}" class="button button-primary">Go to history</a>
+</div>
+{% endblock %}

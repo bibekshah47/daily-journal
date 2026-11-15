@@ -1,269 +1,111 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+{% set active_page = 'home' %}
 
-<!DOCTYPE html>
-<html lang="en">
+{% block title %}Home{% endblock %}
+{% block main_class %}home-page{% endblock %}
 
-<head>
-    <meta charset="UTF-8">
+{% block content %}
+<header class="page-header">
+    <p class="page-kicker">{{ today | friendly_date(true) }}</p>
+    <h1>{{ greeting }}, welcome back.</h1>
+</header>
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
-
-    <title>Home | My Daily Journal</title>
-
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='style.css') }}">
-
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-</head>
-
-<body>
-
-    <!-- SIDEBAR -->
-    <aside class="sidebar">
-
-        <div class="sidebar-header">
-            <i data-lucide="book-open"></i>
-            <span>My Journal</span>
+<!-- TODAY: the one thing this page is for -->
+<section class="today-card {% if today_entry %}is-done{% endif %}" aria-labelledby="today-heading">
+    {% if today_entry %}
+        <h2 id="today-heading" class="today-heading">
+            <i data-lucide="circle-check" aria-hidden="true"></i>
+            You wrote today
+        </h2>
+        <p class="today-text">
+            {% if current_streak > 1 %}That's {{ current_streak }} days in a row. {% endif %}
+            Add more to today's entry, or start a new one.
+        </p>
+        <div class="today-actions">
+            <a href="{{ url_for('view_entry', entry_id=today_entry['id']) }}" class="button button-secondary">
+                Read today's entry
+            </a>
+            <a href="{{ url_for('write_journal') }}" class="button button-quiet">
+                <i data-lucide="plus" aria-hidden="true"></i> New entry
+            </a>
         </div>
-
-        <nav class="sidebar-nav">
-
-            <a href="{{ url_for('home') }}"
-               class="sidebar-link active">
-                <i data-lucide="house"></i>
-                <span>Home</span>
+    {% else %}
+        <h2 id="today-heading" class="visually-hidden">Today's prompt</h2>
+        <p class="today-prompt">{{ prompt }}</p>
+        <div class="today-actions">
+            <a href="{{ url_for('write_journal') }}" class="button button-primary">
+                <i data-lucide="square-pen" aria-hidden="true"></i>
+                Start writing
             </a>
-
-            <a href="{{ url_for('write_journal') }}"
-               class="sidebar-link">
-                <i data-lucide="square-pen"></i>
-                <span>Write Journal</span>
-            </a>
-
-            <a href="{{ url_for('history') }}"
-               class="sidebar-link">
-                <i data-lucide="calendar-days"></i>
-                <span>Journal History</span>
-            </a>
-
-            <a href="{{ url_for('insights') }}"
-               class="sidebar-link">
-                <i data-lucide="chart-no-axes-column"></i>
-                <span>Insights</span>
-            </a>
-
-        </nav>
-
-    </aside>
-
-    <!-- MAIN DASHBOARD -->
-    <main class="container dashboard-page" id="home">
-
-        <!-- GREETING -->
-        <header class="dashboard-header">
-
-            <div class="dashboard-welcome">
-
-                <p class="dashboard-date">
-                    {{ today.strftime("%A, %B %d, %Y") }}
-                </p>
-
-                <h1>{{ greeting }}!</h1>
-
-                <p class="dashboard-subtitle">
-                    A little reflection goes a long way.
-                </p>
-
-            </div>
-
-            <a href="{{ url_for('write_journal') }}"
-               class="dashboard-write-button">
-
-                <i data-lucide="plus"></i>
-                Write Journal
-
-            </a>
-
-        </header>
-
-        <!-- STATISTICS -->
-        <section class="dashboard-section"
-                 id="dashboard-stats">
-
-            <div class="dashboard-section-heading">
-                <h2>Your Overview</h2>
-            </div>
-
-            <div class="dashboard-stats-grid">
-
-                <!-- Total Entries -->
-                <div class="dashboard-stat-card">
-
-                    <div class="dashboard-stat-top">
-                        <span>Total Entries</span>
-                        <i data-lucide="book-open"></i>
-                    </div>
-
-                    <h3>{{ total_entries }}</h3>
-
-                    <p>Journal entries saved</p>
-
-                </div>
-
-                <!-- This Month -->
-                <div class="dashboard-stat-card">
-
-                    <div class="dashboard-stat-top">
-                        <span>This Month</span>
-                        <i data-lucide="calendar-days"></i>
-                    </div>
-
-                    <h3>{{ monthly_entries }}</h3>
-
-                    <p>Entries written this month</p>
-
-                </div>
-
-                <!-- Current Streak -->
-                <div class="dashboard-stat-card">
-
-                    <div class="dashboard-stat-top">
-                        <span>Current Streak</span>
-                        <i data-lucide="flame"></i>
-                    </div>
-
-                    <h3>
-                        {{ current_streak }}
-                        <span class="dashboard-stat-unit">
-                            {% if current_streak == 1 %}
-                                day
-                            {% else %}
-                                days
-                            {% endif %}
-                        </span>
-                    </h3>
-
-                    <p>Consecutive writing days</p>
-
-                </div>
-
-            </div>
-
-        </section>
-
-        <!-- RECENT ENTRIES -->
-        <section class="dashboard-section">
-
-            <div class="dashboard-section-heading">
-
-                <h2>Recent Entries</h2>
-
-                <a href="{{ url_for('history') }}"
-                   class="dashboard-view-all">
-
-                    View all
-                    <i data-lucide="arrow-right"></i>
-
-                </a>
-
-            </div>
-
-            {% if recent_entries %}
-
-                <div class="dashboard-entries">
-
-                    {% for entry in recent_entries %}
-
-                        <a
-                            href="{{ url_for('view_entry', entry_id=entry.id) }}"
-                            class="dashboard-entry-card"
-                        >
-
-                            <div class="dashboard-entry-top">
-
-                                <h3>{{ entry.title }}</h3>
-
-                                <i data-lucide="arrow-up-right"></i>
-
-                            </div>
-
-                            <div class="dashboard-entry-meta">
-
-                                <span>
-                                    <i data-lucide="calendar"></i>
-                                    {{ entry.date }}
-                                </span>
-
-                                {% if entry.mood %}
-
-                                    <span class="dashboard-mood">
-
-                                        {% if entry.mood == "Happy" %}
-                                            😊
-                                        {% elif entry.mood == "Excited" %}
-                                            🤩
-                                        {% elif entry.mood == "Neutral" %}
-                                            😐
-                                        {% elif entry.mood == "Sad" %}
-                                            😔
-                                        {% elif entry.mood == "Stressed" %}
-                                            😣
-                                        {% endif %}
-
-                                        {{ entry.mood }}
-
-                                    </span>
-
-                                {% endif %}
-
-                            </div>
-
-                            <p class="dashboard-entry-preview">
-                                {{ entry.content | truncate(170) }}
-                            </p>
-
-                        </a>
-
-                    {% endfor %}
-
-                </div>
-
-            {% else %}
-
-                <!-- EMPTY STATE -->
-                <div class="dashboard-empty">
-
-                    <div class="dashboard-empty-icon">
-                        <i data-lucide="notebook-pen"></i>
-                    </div>
-
-                    <h3>Your story starts here.</h3>
-
-                    <p>
-                        You haven't written any journal entries yet.
-                        Start with a few thoughts about your day.
-                    </p>
-
-                    <a href="{{ url_for('write_journal') }}"
-                       class="dashboard-write-button">
-
-                        <i data-lucide="plus"></i>
-                        Write Your First Entry
-
-                    </a>
-
-                </div>
-
+            {% if current_streak %}
+            <span class="today-streak">
+                <i data-lucide="flame" aria-hidden="true"></i>
+                Write today to keep your {{ current_streak }}-day streak
+            </span>
             {% endif %}
+        </div>
+    {% endif %}
+</section>
 
-        </section>
+{% if total_entries %}
+<!-- LAST TWO WEEKS: one dot per day, colored by mood -->
+<section class="section" aria-labelledby="fortnight-heading">
+    <div class="section-heading">
+        <h2 id="fortnight-heading">Your last two weeks</h2>
+        <a href="{{ url_for('insights') }}" class="text-link">See insights</a>
+    </div>
+    <ol class="mood-strip">
+        {% for day in last_two_weeks %}
+        {% set mood = mood_lookup.get(day.mood) %}
+        <li class="mood-day {% if day.written %}written{% endif %} {% if mood %}mood-{{ mood.key }}{% endif %} {% if loop.last %}is-today{% endif %}"
+            title="{{ day.date | friendly_date }}{% if day.written %}: {{ day.mood or 'wrote' }}{% else %}: no entry{% endif %}">
+            <span class="mood-day-dot" aria-hidden="true">{% if mood %}{{ mood.emoji }}{% endif %}</span>
+            <span class="mood-day-label">{{ day.date.strftime('%a')[0] }}</span>
+            <span class="visually-hidden">{{ day.date | friendly_date }}: {% if day.written %}{{ day.mood or 'wrote an entry' }}{% else %}no entry{% endif %}</span>
+        </li>
+        {% endfor %}
+    </ol>
+    <dl class="quick-stats">
+        <div>
+            <dt>Current streak</dt>
+            <dd>{{ current_streak }} {{ 'day' if current_streak == 1 else 'days' }}</dd>
+        </div>
+        <div>
+            <dt>This month</dt>
+            <dd>{{ monthly_entries }} {{ 'entry' if monthly_entries == 1 else 'entries' }}</dd>
+        </div>
+        <div>
+            <dt>All time</dt>
+            <dd>{{ total_entries }} {{ 'entry' if total_entries == 1 else 'entries' }}</dd>
+        </div>
+    </dl>
+</section>
 
-    </main>
-
-    <!-- INITIALIZE ICONS -->
-    <script>
-        lucide.createIcons();
-    </script>
-
-</body>
-</html>
+<section class="section" aria-labelledby="recent-heading">
+    <div class="section-heading">
+        <h2 id="recent-heading">Recent entries</h2>
+        <a href="{{ url_for('history') }}" class="text-link">View all</a>
+    </div>
+    <div class="entry-list">
+        {% for entry in recent_entries %}
+        <a href="{{ url_for('view_entry', entry_id=entry.id) }}"
+           class="entry-row {% if entry.mood in mood_lookup %}mood-{{ mood_lookup[entry.mood].key }}{% endif %}">
+            <div class="entry-row-meta">
+                <span>{{ entry.date }}</span>
+                {{ ui.mood_badge(entry.mood) }}
+            </div>
+            <h3 class="entry-row-title">{{ entry.title or entry.date }}</h3>
+            <p class="entry-row-preview">{{ entry.content | truncate(160) }}</p>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+{% else %}
+<section class="empty-state">
+    <i data-lucide="notebook-pen" aria-hidden="true"></i>
+    <h2>Your first page is blank</h2>
+    <p>Entries you write show up here, with your streak and moods over time.</p>
+</section>
+{% endif %}
+{% endblock %}

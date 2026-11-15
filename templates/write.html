@@ -1,283 +1,74 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+{% set active_page = 'write_journal' %}
 
-<!DOCTYPE html>
-<html lang="en">
+{% block title %}Write{% endblock %}
+{% block main_class %}write-page{% endblock %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/quill/quill.snow.css') }}">
+<script defer src="{{ url_for('static', filename='vendor/quill/quill.js') }}"></script>
+<script defer src="{{ url_for('static', filename='journal-editor.js') }}"></script>
+{% endblock %}
 
-    <title>Write Journal | My Journal</title>
+{% block content %}
+<form method="POST" action="{{ url_for('write_journal') }}" class="compose" id="write-form">
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/quill/quill.snow.css') }}">
-    <script defer src="{{ url_for('static', filename='vendor/quill/quill.js') }}"></script>
-    <script defer src="{{ url_for('static', filename='journal-editor.js') }}"></script>
+    <header class="compose-header">
+        <p class="compose-date" id="compose-date"></p>
+        <label for="title" class="visually-hidden">Title (optional)</label>
+        <input type="text" id="title" name="title" class="compose-title"
+               placeholder="Give today a title" autocomplete="off"
+               value="{{ title or '' }}">
+    </header>
 
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='style.css') }}">
+    {% if error %}
+    <div class="form-error" role="alert">
+        <i data-lucide="circle-alert" aria-hidden="true"></i>
+        {{ error }}
+    </div>
+    {% endif %}
 
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-</head>
+    {{ ui.mood_picker(mood) }}
 
-<body>
+    {{ ui.editor_fields(content, content_html, prompt) }}
 
-    <!-- Sidebar -->
-    <aside class="sidebar">
+    {{ ui.reflection_fields(went_well, went_wrong, improve_tomorrow) }}
 
-        <div class="sidebar-header">
-            <i data-lucide="book-open"></i>
-            <span>My Journal</span>
+    <!-- Actions stay visible at the bottom while you write -->
+    <div class="compose-bar">
+        <div class="compose-status">
+            <span id="word-count">0 words</span>
+            <span id="autosave-status" role="status" aria-live="polite">Drafts save automatically</span>
         </div>
-
-        <nav class="sidebar-nav">
-
-            <a href="{{ url_for('home') }}"
-               class="sidebar-link">
-                <i data-lucide="house"></i>
-                <span>Home</span>
-            </a>
-
-            <a href="{{ url_for('write_journal') }}"
-               class="sidebar-link active">
-                <i data-lucide="square-pen"></i>
-                <span>Write Journal</span>
-            </a>
-
-            <a href="{{ url_for('history') }}"
-               class="sidebar-link">
-                <i data-lucide="calendar-days"></i>
-                <span>Journal History</span>
-            </a>
-
-            <a href="{{ url_for('insights') }}"
-               class="sidebar-link">
-                <i data-lucide="chart-no-axes-column"></i>
-                <span>Insights</span>
-            </a>
-
-        </nav>
-
-    </aside>
-
-    <!-- Main Content -->
-    <main class="container write-page">
-
-        <!-- Page Header -->
-        <header class="write-header">
-
-            <div class="write-header-icon">
-                <i data-lucide="square-pen"></i>
-            </div>
-
-            <h1>Write Journal</h1>
-
-            <p>A little space for your thoughts.</p>
-
-        </header>
-
-        <!-- Auto-Save Status -->
-        <div id="autosave-status"
-             role="status"
-             aria-live="polite"
-             style="
-                font-size: 13px;
-                color: #6b7280;
-                margin-bottom: 20px;
-             ">
-            Draft protection is on
+        <div class="compose-actions">
+            <button type="button" id="discard-draft" class="button button-quiet">
+                Discard draft
+            </button>
+            <button type="submit" class="button button-primary" id="save-button"
+                    title="Save entry (Ctrl+S)">
+                <i data-lucide="check" aria-hidden="true"></i>
+                Save entry
+            </button>
         </div>
+    </div>
+</form>
+{% endblock %}
 
-        <!-- Error Message -->
-        {% if error %}
-            <div class="write-error">
-                {{ error }}
-            </div>
-        {% endif %}
-
-        <!-- Journal Form -->
-        <form
-            method="POST"
-            action="{{ url_for('write_journal') }}"
-            class="write-form"
-            id="write-form"
-        >
-
-            <!-- Title -->
-            <div class="write-form-group">
-
-                <label for="title">
-                    Journal Title
-                    <span class="write-optional">
-                        (Optional)
-                    </span>
-                </label>
-
-                <input
-                    type="text"
-                    id="title"
-                    name="title"
-                    placeholder="Give today a title..."
-                    value="{{ title or '' }}"
-                >
-
-            </div>
-
-            <!-- Mood -->
-            <div class="write-form-group">
-
-                <label for="mood">
-                    How are you feeling today?
-                </label>
-
-                <select id="mood" name="mood">
-
-                    <option value="">
-                        Select a mood
-                    </option>
-
-                    <option value="Happy"
-                        {% if mood == "Happy" %}selected{% endif %}>
-                        😊 Happy
-                    </option>
-
-                    <option value="Excited"
-                        {% if mood == "Excited" %}selected{% endif %}>
-                        🤩 Excited
-                    </option>
-
-                    <option value="Neutral"
-                        {% if mood == "Neutral" %}selected{% endif %}>
-                        😐 Neutral
-                    </option>
-
-                    <option value="Sad"
-                        {% if mood == "Sad" %}selected{% endif %}>
-                        😔 Sad
-                    </option>
-
-                    <option value="Stressed"
-                        {% if mood == "Stressed" %}selected{% endif %}>
-                        😣 Stressed
-                    </option>
-
-                </select>
-
-            </div>
-
-            <!-- Journal Content -->
-            <div class="write-form-group">
-
-                <label for="journal" id="journal-label">
-                    Your Journal Entry
-                </label>
-
-                <textarea
-                    id="journal"
-                    name="journal"
-                    rows="14"
-                    placeholder="What's on your mind today?"
-                    required
-                >{{ content or '' }}</textarea>
-
-                <div id="journal-editor" class="journal-editor" hidden></div>
-                <input type="hidden" name="editor_format" id="editor-format" value="plain">
-                <input type="hidden" name="journal_html" id="journal-html" value="">
-                <template id="initial-journal-html">{% if content_html %}{{ content_html | journal_html }}{% endif %}</template>
-
-                <div class="write-word-count">
-                    <span id="word-count">0 words</span>
-                </div>
-
-            </div>
-
-        <section class="daily-reflection" id="daily-reflection" aria-labelledby="daily-reflection-heading">
-            <header class="reflection-header">
-                <h2 id="daily-reflection-heading"><i data-lucide="brain" aria-hidden="true"></i> Daily Reflection</h2>
-                <p>Take a moment to reflect on your day · Optional.</p>
-            </header>
-            <div class="reflection-fields">
-                <div class="write-form-group">
-                    <label for="went_well">What went well today?</label>
-                    <textarea id="went_well" name="went_well" rows="3" placeholder="Celebrate a small win, a meaningful moment, or something you enjoyed.">{{ went_well or '' }}</textarea>
-                </div>
-                <div class="write-form-group">
-                    <label for="went_wrong">What didn't go well today?</label>
-                    <textarea id="went_wrong" name="went_wrong" rows="3" placeholder="Reflect on a challenge, a setback, or something that felt difficult.">{{ went_wrong or '' }}</textarea>
-                </div>
-                <div class="write-form-group">
-                    <label for="improve_tomorrow">What can I improve tomorrow?</label>
-                    <textarea id="improve_tomorrow" name="improve_tomorrow" rows="3" placeholder="Think of one small step you can take to make tomorrow better.">{{ improve_tomorrow or '' }}</textarea>
-                </div>
-            </div>
-        </section>
-
-            <!-- Actions -->
-            <div class="write-actions">
-
-                <button
-                    type="submit"
-                    class="write-save-button"
-                    id="save-button"
-                >
-                    <i data-lucide="check"></i>
-                    Save Journal
-                </button>
-
-                <a href="{{ url_for('history') }}"
-                   class="write-cancel-button">
-                    Cancel
-                </a>
-
-                <button
-                    type="button"
-                    id="discard-draft"
-                    class="write-cancel-button"
-                    style="
-                        cursor: pointer;
-                        background: transparent;
-                        color: #b45353;
-                    "
-                >
-                    Discard Draft
-                </button>
-
-            </div>
-
-        </form>
-
-    </main>
-
-    <!-- JavaScript -->
-    <script>
-        lucide.createIcons();
-
+{% block scripts %}
+<script>
         const DRAFT_KEY = "my-journal-new-entry-draft";
         const reflectionInputs = ["went_well", "went_wrong", "improve_tomorrow"]
             .map(id => document.getElementById(id));
 
-        const titleInput =
-            document.getElementById("title");
-
-        const moodSelect =
-            document.getElementById("mood");
-
-        const journalTextarea =
-            document.getElementById("journal");
-
-        const wordCount =
-            document.getElementById("word-count");
-
-        const writeForm =
-            document.getElementById("write-form");
-
-        const saveButton =
-            document.getElementById("save-button");
-
-        const autosaveStatus =
-            document.getElementById("autosave-status");
-
-        const discardButton =
-            document.getElementById("discard-draft");
+        const titleInput = document.getElementById("title");
+        const moodSelect = document.getElementById("mood");
+        const journalTextarea = document.getElementById("journal");
+        const wordCount = document.getElementById("word-count");
+        const writeForm = document.getElementById("write-form");
+        const saveButton = document.getElementById("save-button");
+        const autosaveStatus = document.getElementById("autosave-status");
+        const discardButton = document.getElementById("discard-draft");
 
         let autosaveTimer = null;
         let submitting = false;
@@ -286,13 +77,8 @@
         // Count the words in the journal.
         function updateWordCount() {
             const text = journalTextarea.value.trim();
-
-            const count = text
-                ? text.split(/\s+/).length
-                : 0;
-
-            wordCount.textContent =
-                count + (count === 1 ? " word" : " words");
+            const count = text ? text.split(/\s+/).length : 0;
+            wordCount.textContent = count + (count === 1 ? " word" : " words");
         }
 
         // Collect everything the user has written.
@@ -312,6 +98,10 @@
             autosaveStatus.textContent = message;
         }
 
+        function timeNow() {
+            return new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+        }
+
         // Save the draft in this browser.
         function saveDraft() {
             if (submitting || !draftStorageAvailable) {
@@ -328,21 +118,17 @@
                     reflectionInputs.every(input => !input.value.trim())
                 ) {
                     localStorage.removeItem(DRAFT_KEY);
-                    setStatus("Draft protection is on");
+                    discardButton.hidden = true;
+                    setStatus("Drafts save automatically");
                     return;
                 }
 
-                localStorage.setItem(
-                    DRAFT_KEY,
-                    JSON.stringify(draft)
-                );
-
-                setStatus("Draft saved automatically");
+                localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+                discardButton.hidden = false;
+                setStatus("Draft saved " + timeNow());
             } catch (error) {
                 draftStorageAvailable = false;
-                setStatus(
-                    "Auto-save unavailable in this browser"
-                );
+                setStatus("Drafts can't be saved in this browser");
                 console.error(error);
             }
         }
@@ -352,24 +138,18 @@
             if (submitting) {
                 return;
             }
-
-            setStatus("Saving draft...");
-
+            setStatus("Saving draft…");
             clearTimeout(autosaveTimer);
-
-            autosaveTimer = setTimeout(
-                saveDraft,
-                1000
-            );
+            autosaveTimer = setTimeout(saveDraft, 1000);
         }
 
         // Restore unfinished writing.
         function restoreDraft() {
             try {
-                const storedDraft =
-                    localStorage.getItem(DRAFT_KEY);
+                const storedDraft = localStorage.getItem(DRAFT_KEY);
 
                 if (!storedDraft) {
+                    discardButton.hidden = true;
                     return;
                 }
 
@@ -389,17 +169,16 @@
 
                 titleInput.value = draft.title || "";
                 moodSelect.value = draft.mood || "";
-                journalTextarea.value =
-                    draft.content || "";
+                journalTextarea.value = draft.content || "";
 
                 reflectionInputs.forEach(input => {
                     input.value = draft[input.name] || "";
                 });
                 window.restoredJournalDraft = draft;
                 updateWordCount();
-                setStatus("Unfinished draft restored");
+                setStatus("Draft restored");
             } catch (error) {
-                setStatus("Could not restore saved draft");
+                setStatus("Couldn't restore your saved draft");
                 console.error(error);
             }
         }
@@ -407,105 +186,90 @@
         // Save immediately when leaving the page.
         function saveBeforeLeaving() {
             clearTimeout(autosaveTimer);
-
             if (!submitting) {
                 saveDraft();
             }
         }
 
         // Discard the current draft.
-        discardButton.addEventListener(
-            "click",
-            function () {
-                const confirmed = confirm(
-                    "Discard your unfinished journal? " +
-                    "This cannot be undone."
-                );
-
-                if (!confirmed) {
-                    return;
-                }
-
-                clearTimeout(autosaveTimer);
-
-                try {
-                    localStorage.removeItem(DRAFT_KEY);
-                } catch (error) {
-                    console.error(error);
-                }
-
-                writeForm.reset();
-                [titleInput, moodSelect, journalTextarea, ...reflectionInputs]
-                    .forEach(input => { input.value = ""; });
-                if (window.journalEditor) window.journalEditor.clear();
-                updateWordCount();
-
-                setStatus("Draft discarded");
+        discardButton.addEventListener("click", function () {
+            const confirmed = confirm(
+                "Discard this draft? Everything you've written here will be cleared."
+            );
+            if (!confirmed) {
+                return;
             }
-        );
+
+            clearTimeout(autosaveTimer);
+
+            try {
+                localStorage.removeItem(DRAFT_KEY);
+            } catch (error) {
+                console.error(error);
+            }
+
+            writeForm.reset();
+            [titleInput, moodSelect, journalTextarea, ...reflectionInputs]
+                .forEach(input => { input.value = ""; });
+            moodSelect.dispatchEvent(new Event("mood-sync"));
+            if (window.journalEditor) window.journalEditor.clear();
+            updateWordCount();
+            discardButton.hidden = true;
+            setStatus("Draft discarded");
+        });
 
         reflectionInputs.forEach(input => {
             input.addEventListener("input", scheduleAutosave);
         });
 
         // Watch all journal fields for changes.
-        titleInput.addEventListener(
-            "input",
-            scheduleAutosave
-        );
+        titleInput.addEventListener("input", scheduleAutosave);
+        moodSelect.addEventListener("change", scheduleAutosave);
+        journalTextarea.addEventListener("input", function () {
+            updateWordCount();
+            scheduleAutosave();
+        });
 
-        moodSelect.addEventListener(
-            "change",
-            scheduleAutosave
-        );
-
-        journalTextarea.addEventListener(
-            "input",
-            function () {
-                updateWordCount();
-                scheduleAutosave();
+        // Handle the Save button.
+        writeForm.addEventListener("submit", function (event) {
+            if (!writeForm.checkValidity()) {
+                return;
             }
-        );
 
-        // Handle the Save Journal button.
-        writeForm.addEventListener(
-            "submit",
-            function (event) {
-                if (!writeForm.checkValidity()) {
-                    return;
-                }
+            // Preserve a backup before submitting.
+            clearTimeout(autosaveTimer);
+            saveDraft();
 
-                // Preserve a backup before submitting.
-                clearTimeout(autosaveTimer);
-                saveDraft();
+            submitting = true;
 
-                submitting = true;
-
-                try {
-                    sessionStorage.setItem("my-journal-save-pending", "true");
-                } catch (error) {
-                    console.error(error);
-                }
-
-                saveButton.disabled = true;
-                saveButton.textContent = "Saving...";
+            try {
+                sessionStorage.setItem("my-journal-save-pending", "true");
+            } catch (error) {
+                console.error(error);
             }
-        );
 
-        window.addEventListener(
-            "pagehide",
-            saveBeforeLeaving
-        );
+            saveButton.disabled = true;
+            saveButton.textContent = "Saving…";
+        });
+
+        window.addEventListener("pagehide", saveBeforeLeaving);
 
         // Restore the draft when the page opens.
         restoreDraft();
         updateWordCount();
+</script>
+{{ ui.mood_picker_script() }}
+<script>
+    // Show today's date in the header, using this computer's clock.
+    document.getElementById("compose-date").textContent =
+        new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 
-    </script>
-
-
-
-
-
-</body>
-</html>
+    // Ctrl+S / Cmd+S saves the entry.
+    document.addEventListener("keydown", function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+            event.preventDefault();
+            document.getElementById("write-form").requestSubmit();
+        }
+    });
+</script>
+{% endblock %}

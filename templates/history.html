@@ -1,387 +1,155 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+{% set active_page = 'history' %}
 
-<!DOCTYPE html>
-<html lang="en">
+{% block title %}History{% endblock %}
+{% block main_class %}history-page{% endblock %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+{% block content %}
+<header class="page-header">
+    <h1>History</h1>
+    <p class="page-subtitle">{{ total_entries }} {{ 'entry' if total_entries == 1 else 'entries' }} so far.</p>
+</header>
 
-    <title>Journal History | My Journal</title>
+<div class="history-layout">
 
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='style.css') }}">
-
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-</head>
-
-<body>
-
-    <!-- Sidebar -->
-    <aside class="sidebar">
-
-        <div class="sidebar-header">
-            <i data-lucide="book-open"></i>
-            <span>My Journal</span>
+    <!-- CALENDAR (moves above the list on small screens) -->
+    <section class="calendar-panel" aria-labelledby="calendar-heading">
+        <div class="calendar-nav">
+            <a href="{{ url_for('history', month=previous_month, favorites='1' if favorites_only else None) }}"
+               class="icon-button" aria-label="Previous month">
+                <i data-lucide="chevron-left" aria-hidden="true"></i>
+            </a>
+            <h2 id="calendar-heading">{{ displayed_month.strftime("%B %Y") }}</h2>
+            <a href="{{ url_for('history', month=next_month, favorites='1' if favorites_only else None) }}"
+               class="icon-button" aria-label="Next month">
+                <i data-lucide="chevron-right" aria-hidden="true"></i>
+            </a>
         </div>
 
-        <nav class="sidebar-nav">
+        <div class="calendar-grid" role="grid">
+            {% for weekday in ["S", "M", "T", "W", "T", "F", "S"] %}
+            <span class="calendar-weekday" aria-hidden="true">{{ weekday }}</span>
+            {% endfor %}
 
-            <a href="{{ url_for('home') }}" class="sidebar-link">
-                <i data-lucide="house"></i>
-                <span>Home</span>
+            {% for week in calendar_weeks %}
+            {% for day in week %}
+            {% set iso = day.isoformat() %}
+            {% set has_entry = iso in calendar_entry_dates %}
+            {% set mood = mood_lookup.get(calendar_moods.get(iso, '')) %}
+            {% set is_selected = filter_date == iso %}
+            <a href="{{ url_for('history', filter_date=None if is_selected else iso, month=day.strftime('%Y-%m'), favorites='1' if favorites_only else None) }}"
+               class="calendar-day
+                      {% if day.month != current_month %}other-month{% endif %}
+                      {% if has_entry %}has-entry{% endif %}
+                      {% if mood %}mood-{{ mood.key }}{% endif %}
+                      {% if is_selected %}selected{% endif %}
+                      {% if day == today %}is-today{% endif %}"
+               aria-label="{{ day | friendly_date }}{% if has_entry %}, has entries{% endif %}{% if is_selected %}, selected{% endif %}"
+               {% if is_selected %}aria-current="date"{% endif %}>
+                {{ day.day }}
             </a>
+            {% endfor %}
+            {% endfor %}
+        </div>
 
-            <a href="{{ url_for('write_journal') }}" class="sidebar-link">
-                <i data-lucide="square-pen"></i>
-                <span>Write Journal</span>
-            </a>
+        <ul class="calendar-legend" aria-label="Mood colors">
+            {% for mood in moods %}
+            <li class="mood-{{ mood.key }}"><span class="legend-swatch" aria-hidden="true"></span>{{ mood.name }}</li>
+            {% endfor %}
+        </ul>
+    </section>
 
-            <a href="{{ url_for('history') }}"
-               class="sidebar-link active">
-                <i data-lucide="calendar-days"></i>
-                <span>Journal History</span>
-            </a>
+    <!-- ENTRIES -->
+    <section class="history-results" id="journal-results" aria-label="Entries">
 
-            <a href="{{ url_for('insights') }}" class="sidebar-link">
-                <i data-lucide="chart-no-axes-column"></i>
-                <span>Insights</span>
-            </a>
+        <form action="{{ url_for('history') }}" method="GET" class="search-bar" role="search">
+            {% if favorites_only %}<input type="hidden" name="favorites" value="1">{% endif %}
+            {% if filter_date %}<input type="hidden" name="filter_date" value="{{ filter_date }}">{% endif %}
+            <i data-lucide="search" aria-hidden="true"></i>
+            <label for="search" class="visually-hidden">Search entries</label>
+            <input type="search" id="search" name="search"
+                   placeholder="Search titles and text" value="{{ search_query }}">
+            <button type="submit" class="button button-secondary">Search</button>
+        </form>
 
-        </nav>
-
-    </aside>
-
-    <!-- Main Content -->
-    <main class="container history-page">
-
-        <header class="history-header">
-
-            <h1>Journal History</h1>
-
-            <p>
-                A collection of your thoughts, memories,
-                and experiences.
-            </p>
-
-            <div class="history-summary">
-                <i data-lucide="book-open"></i>
-                <span>
-                    {{ total_entries }} total journal entries
-                </span>
-            </div>
-
-        </header>
-
-        <!-- Calendar -->
-        <section class="history-calendar">
-
-            <div class="history-section-heading">
-                <h2>Journal Calendar</h2>
-            </div>
-
-            <div class="history-calendar-navigation">
-
-                <a href="{{ url_for('history', month=previous_month, favorites='1' if favorites_only else '') }}"
-                   aria-label="Previous month">
-                    <i data-lucide="chevron-left"></i>
+        <div class="filter-row">
+            <div class="segmented" role="group" aria-label="Show">
+                <a class="segment {% if not favorites_only %}selected{% endif %}"
+                   {% if not favorites_only %}aria-current="true"{% endif %}
+                   href="{{ url_for('history', search=search_query or None, filter_date=filter_date or None, month=displayed_month.strftime('%Y-%m')) }}">
+                    All
                 </a>
-
-                <h3>
-                    {{ displayed_month.strftime("%B %Y") }}
-                </h3>
-
-                <a href="{{ url_for('history', month=next_month, favorites='1' if favorites_only else '') }}"
-                   aria-label="Next month">
-                    <i data-lucide="chevron-right"></i>
+                <a class="segment {% if favorites_only %}selected{% endif %}"
+                   {% if favorites_only %}aria-current="true"{% endif %}
+                   href="{{ url_for('history', search=search_query or None, filter_date=filter_date or None, month=displayed_month.strftime('%Y-%m'), favorites='1') }}">
+                    <i data-lucide="star" aria-hidden="true"></i> Favorites
                 </a>
-
             </div>
 
-            <div class="history-calendar-grid">
+            {% if filter_date %}
+            <a class="filter-pill" href="{{ url_for('history', search=search_query or None, favorites='1' if favorites_only else None, month=displayed_month.strftime('%Y-%m')) }}"
+               aria-label="Remove date filter">
+                {{ filter_date | friendly_date }}
+                <i data-lucide="x" aria-hidden="true"></i>
+            </a>
+            {% endif %}
+            {% if search_query %}
+            <a class="filter-pill" href="{{ url_for('history', filter_date=filter_date or None, favorites='1' if favorites_only else None, month=displayed_month.strftime('%Y-%m')) }}"
+               aria-label="Clear search">
+                “{{ search_query }}”
+                <i data-lucide="x" aria-hidden="true"></i>
+            </a>
+            {% endif %}
 
-                {% for weekday in [
-                    "Sun", "Mon", "Tue", "Wed",
-                    "Thu", "Fri", "Sat"
-                ] %}
+            <span class="result-count">{{ entries|length }} {{ 'result' if entries|length == 1 else 'results' }}</span>
+        </div>
 
-                    <div class="history-weekday">
-                        {{ weekday }}
+        {% for group in entry_groups %}
+        <h2 class="group-label">{{ group.label }}</h2>
+        <div class="entry-list">
+            {% for entry in group.entries %}
+            <article class="entry-row has-actions {% if entry.mood in mood_lookup %}mood-{{ mood_lookup[entry.mood].key }}{% endif %}" id="entry-{{ entry.id }}">
+                <a href="{{ url_for('view_entry', entry_id=entry.id) }}" class="entry-row-link">
+                    <div class="entry-row-meta">
+                        <span>{{ entry.date }}, {{ entry.time }}</span>
+                        {{ ui.mood_badge(entry.mood) }}
                     </div>
-
-                {% endfor %}
-
-                {% for week in calendar_weeks %}
-
-                    {% for day in week %}
-
-                        <a
-                            href="{{ url_for('history',
-                                month=day.strftime('%Y-%m'),
-                                filter_date=day.isoformat(),
-                                favorites='1' if favorites_only else ''
-                            ) }}#journal-results"
-
-                            class="history-calendar-day
-                                {% if day.month != current_month %}
-                                    other-month
-                                {% endif %}
-                                {% if day.isoformat() in calendar_entry_dates %}
-                                    has-entry
-                                {% endif %}
-                                {% if filter_date == day.isoformat() %}
-                                    selected
-                                {% endif %}
-                            "
-
-                            title="{{ day.strftime('%B %d, %Y') }}"
-                        >
-                            {{ day.day }}
-
-                            {% if day.isoformat() in calendar_entry_dates %}
-                                <span class="history-day-dot"></span>
-                            {% endif %}
-
-                        </a>
-
-                    {% endfor %}
-
-                {% endfor %}
-
-            </div>
-
-            <p class="history-calendar-legend">
-                <span class="history-legend-dot"></span>
-                Green dates have journal entries.
-                Click a date to view them.
-            </p>
-
-        </section>
-
-        <!-- Entries -->
-        <section class="history-results" id="journal-results">
-
-            <div class="history-section-heading">
-
-                <div>
-                    <h2>Your Journal Entries</h2>
-                    <p>
-                        {{ entries|length }} entries found
-                    </p>
-                </div>
-
-            </div>
-
-            <!-- All / Favorites filter -->
-            <div class="favorites-filters" aria-label="Journal entry filters">
-                <a class="favorites-filter {% if not favorites_only %}selected{% endif %}"
-                   href="{{ url_for('history', search=search_query, filter_date=filter_date, month=displayed_month.strftime('%Y-%m')) }}#journal-results">
-                    All Entries
+                    <h3 class="entry-row-title">{{ entry.title or 'Untitled' }}</h3>
+                    <p class="entry-row-preview">{{ entry.content | truncate(180) }}</p>
                 </a>
-                <a class="favorites-filter {% if favorites_only %}selected{% endif %}"
-                   href="{{ url_for('history', search=search_query, filter_date=filter_date, month=displayed_month.strftime('%Y-%m'), favorites='1') }}#journal-results">
-                    <i data-lucide="star"></i> Favorites
-                </a>
-            </div>
-
-            <!-- Search -->
-            <form
-                action="{{ url_for('history') }}#journal-results"
-                method="GET"
-                class="history-filter-form"
-            >
-
-                {% if favorites_only %}
-                    <input type="hidden" name="favorites" value="1">
-                {% endif %}
-
-                <div class="history-search-field">
-
-                    <i data-lucide="search"></i>
-
-                    <input
-                        type="text"
-                        name="search"
-                        placeholder="Search your journal..."
-                        value="{{ search_query }}"
-                    >
-
-                </div>
-
-                <input
-                    type="date"
-                    name="filter_date"
-                    value="{{ filter_date }}"
-                    class="history-date-field"
-                >
-
-                <button type="submit"
-                        class="history-filter-button">
-                    Search
-                </button>
-
-                {% if search_query or filter_date %}
-                    <a
-                        href="{{ url_for('history') }}#journal-results"
-                        class="history-clear-link"
-                    >
-                        Clear
-                    </a>
-                {% endif %}
-
-            </form>
-
-            <!-- Journal Cards -->
-            <div class="history-entry-list">
-
-                {% for entry in entries %}
-
-                    <article class="history-card">
-
-                        <a
-                            href="{{ url_for('view_entry', entry_id=entry.id) }}"
-                            class="history-card-main"
-                        >
-
-                            <div class="history-card-top">
-
-                                <span class="history-card-date">
-                                    <i data-lucide="calendar-days"></i>
-                                    {{ entry.date }}
-                                </span>
-
-                                {% if entry.mood %}
-                                    <span class="history-mood">
-                                        {{ entry.mood }}
-                                    </span>
-                                {% endif %}
-
-                            </div>
-
-                            <h3>
-                                {% if entry.title %}
-                                    {{ entry.title }}
-                                {% else %}
-                                    Untitled Entry
-                                {% endif %}
-                            </h3>
-
-                            <p class="history-card-preview">
-                                {{ entry.content | truncate(180) }}
-                            </p>
-
-                            <span class="history-card-time">
-                                {{ entry.time }}
-                            </span>
-
-                        </a>
-
-                        <div class="history-card-actions">
-
-                            <form action="{{ url_for('toggle_favorite', entry_id=entry.id) }}"
-                                  method="POST" class="history-favorite-form">
-                                <input type="hidden" name="search" value="{{ search_query }}">
-                                <input type="hidden" name="filter_date" value="{{ filter_date }}">
-                                <input type="hidden" name="month" value="{{ displayed_month.strftime('%Y-%m') }}">
-                                {% if favorites_only %}
-                                    <input type="hidden" name="favorites" value="1">
-                                {% endif %}
-                                <button type="submit"
-                                        class="history-action-link favorite-button {% if entry.is_favorite %}is-favorite{% endif %}"
-                                        aria-label="{{ 'Remove from favorites' if entry.is_favorite else 'Add to favorites' }}"
-                                        title="{{ 'Remove from favorites' if entry.is_favorite else 'Add to favorites' }}">
-                                    <i data-lucide="star"></i>
-                                    Favorite
-                                </button>
-                            </form>
-
-
-                            <a
-                                href="{{ url_for('view_entry', entry_id=entry.id) }}"
-                                class="history-action-link"
-                            >
-                                <i data-lucide="book-open"></i>
-                                Read
-                            </a>
-
-                            <a
-                                href="{{ url_for('edit_entry', entry_id=entry.id) }}"
-                                class="history-action-link"
-                            >
-                                <i data-lucide="pencil"></i>
-                                Edit
-                            </a>
-
-                            <form
-                                action="{{ url_for('delete_entry', entry_id=entry.id) }}"
-                                method="POST"
-                                class="history-delete-form"
-                                onsubmit="return confirm('Are you sure you want to delete this journal entry? This cannot be undone.');"
-                            >
-
-                                <button
-                                    type="submit"
-                                    class="history-action-link history-delete-button"
-                                >
-                                    <i data-lucide="trash-2"></i>
-                                    Delete
-                                </button>
-
-                            </form>
-
-                        </div>
-
-                    </article>
-
-                {% else %}
-
-                    <div class="history-empty-state">
-
-                        <i data-lucide="notebook-pen"></i>
-
-                        <h3>No journal entries found</h3>
-
-                        <p>
-                            {% if favorites_only %}
-                                No favorites match your filters. Star an entry in All Entries to save it here.
-                            {% elif search_query or filter_date %}
-                                Try changing your search or
-                                clearing your filters.
-                            {% else %}
-                                Your journal entries will
-                                appear here once you start writing.
-                            {% endif %}
-                        </p>
-
-                        {% if favorites_only or search_query or filter_date %}
-
-                            <a href="{{ url_for('history') }}"
-                               class="history-empty-link">
-                                Clear Filters
-                            </a>
-
-                        {% else %}
-
-                            <a href="{{ url_for('write_journal') }}"
-                               class="history-empty-link">
-                                Write Your First Entry
-                            </a>
-
-                        {% endif %}
-
-                    </div>
-
-                {% endfor %}
-
-            </div>
-
-        </section>
-
-    </main>
-
-    <script>
-        lucide.createIcons();
-    </script>
-
-</body>
-</html>
+                <form action="{{ url_for('toggle_favorite', entry_id=entry.id) }}" method="POST" class="favorite-form">
+                    <input type="hidden" name="search" value="{{ search_query }}">
+                    <input type="hidden" name="filter_date" value="{{ filter_date }}">
+                    <input type="hidden" name="month" value="{{ displayed_month.strftime('%Y-%m') }}">
+                    {% if favorites_only %}<input type="hidden" name="favorites" value="1">{% endif %}
+                    <button type="submit" class="icon-button favorite-button {% if entry.is_favorite %}is-favorite{% endif %}"
+                            aria-pressed="{{ 'true' if entry.is_favorite else 'false' }}"
+                            aria-label="{{ 'Remove from favorites' if entry.is_favorite else 'Add to favorites' }}"
+                            title="{{ 'Remove from favorites' if entry.is_favorite else 'Add to favorites' }}">
+                        <i data-lucide="star" aria-hidden="true"></i>
+                    </button>
+                </form>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i data-lucide="{{ 'search-x' if (search_query or filter_date or favorites_only) else 'notebook-pen' }}" aria-hidden="true"></i>
+            {% if favorites_only and not (search_query or filter_date) %}
+                <h2>No favorites yet</h2>
+                <p>Tap the star on any entry to keep it here.</p>
+            {% elif search_query or filter_date or favorites_only %}
+                <h2>Nothing matches</h2>
+                <p>Try different words, or clear the filters above.</p>
+                <a href="{{ url_for('history') }}" class="button button-secondary">Clear filters</a>
+            {% else %}
+                <h2>No entries yet</h2>
+                <p>Everything you write will be listed here by month.</p>
+                <a href="{{ url_for('write_journal') }}" class="button button-primary">Write your first entry</a>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </section>
+</div>
+{% endblock %}

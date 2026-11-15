@@ -1,101 +1,82 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Insights | My Journal</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-</head>
-<body>
-    <aside class="sidebar">
+{% extends "base.html" %}
+{% set active_page = 'insights' %}
 
-        <div class="sidebar-header">
-            <i data-lucide="book-open"></i>
-            <span>My Journal</span>
-        </div>
+{% block title %}Insights{% endblock %}
+{% block main_class %}insights-page{% endblock %}
 
-        <nav class="sidebar-nav">
+{% block content %}
+<header class="page-header">
+    <h1>Insights</h1>
+    <p class="page-subtitle">How often you write, how you've been feeling, and which questions you come back to.</p>
+</header>
 
-            <a href="{{ url_for('home') }}"
-               class="sidebar-link">
-                <i data-lucide="house"></i>
-                <span>Home</span>
-            </a>
+{% if not total_entries %}
+<div class="empty-state">
+    <i data-lucide="notebook-pen" aria-hidden="true"></i>
+    <h2>Nothing to show yet</h2>
+    <p>Insights fill in as you write. One entry is enough to start.</p>
+    <a href="{{ url_for('write_journal') }}" class="button button-primary">Write your first entry</a>
+</div>
+{% endif %}
 
-            <a href="{{ url_for('write_journal') }}"
-               class="sidebar-link">
-                <i data-lucide="square-pen"></i>
-                <span>Write Journal</span>
-            </a>
+<section class="stat-band" aria-label="Writing habits">
+    <div class="stat">
+        <p class="stat-value">{{ current_streak }} <span>{{ 'day' if current_streak == 1 else 'days' }}</span></p>
+        <h2 class="stat-label">Current streak</h2>
+        <p class="stat-note">Still counts if your last entry was yesterday.</p>
+    </div>
+    <div class="stat">
+        <p class="stat-value">{{ longest_streak }} <span>{{ 'day' if longest_streak == 1 else 'days' }}</span></p>
+        <h2 class="stat-label">Longest streak</h2>
+    </div>
+    <div class="stat">
+        <p class="stat-value">{{ monthly_entries }}</p>
+        <h2 class="stat-label">Entries this month</h2>
+    </div>
+    <div class="stat">
+        <p class="stat-value">{{ total_entries }}</p>
+        <h2 class="stat-label">Entries in total</h2>
+    </div>
+</section>
 
-            <a href="{{ url_for('history') }}"
-               class="sidebar-link">
-                <i data-lucide="calendar-days"></i>
-                <span>Journal History</span>
-            </a>
-
-            <a href="{{ url_for('insights') }}"
-               class="sidebar-link active" aria-current="page">
-                <i data-lucide="chart-no-axes-column"></i>
-                <span>Insights</span>
-            </a>
-
-        </nav>
-
-    </aside>
-
-    <main class="container insights-page">
-        <header class="insights-header">
-            <h1>Insights</h1>
-            <p>A small look at your writing and reflection habits.</p>
-        </header>
-        {% if not total_entries %}
-        <div class="insights-empty">
-            <i data-lucide="notebook-pen" aria-hidden="true"></i>
-            <h2>Your story starts with one entry.</h2>
-            <p>Write a little about your day. Your insights will grow with you.</p>
-            <a href="{{ url_for('write_journal') }}" class="dashboard-write-button">Write your first entry</a>
-        </div>
-        {% endif %}
-        <section class="insights-grid" aria-label="Journal statistics">
-            {% set cards = [
-                ('Total entries', total_entries, 'book-open', 'Journal entries saved'),
-                ('Current streak', current_streak, 'flame', 'Consecutive writing days · active through yesterday', 'days'),
-                ('Longest streak', longest_streak, 'award', 'Your longest run of consecutive writing days', 'days'),
-                ('This month', monthly_entries, 'calendar-days', 'Entries written this calendar month'),
-                ('Entries with reflections', reflection_entries, 'brain', 'Entries with at least one reflection answer'),
-                ('Reflection completion', ('%.1f'|format(reflection_rate)) ~ '%', 'circle-check', 'Percentage of all entries with a reflection')
-            ] %}
-            {% for card in cards %}
-            <article class="insights-card">
-                <div class="insights-card-heading">
-                    <h2>{{ card[0] }}</h2>
-                    <i data-lucide="{{ card[2] }}" aria-hidden="true"></i>
-                </div>
-                <p class="insights-value">{{ card[1] }}{% if card|length > 4 %} <span>{{ 'day' if card[1] == 1 else 'days' }}</span>{% endif %}</p>
-                <p class="insights-description">{{ card[3] }}</p>
-            </article>
+<div class="insights-columns">
+    <section class="panel" aria-labelledby="mood-heading">
+        <h2 id="mood-heading" class="panel-title">Moods</h2>
+        <ul class="mood-bars">
+            {% for mood in mood_breakdown %}
+            <li class="mood-bar-row mood-{{ mood.key }}">
+                <span class="mood-bar-label"><span aria-hidden="true">{{ mood.emoji }}</span> {{ mood.name }}</span>
+                <span class="mood-bar-track" aria-hidden="true">
+                    <span class="mood-bar-fill" style="width: {{ (100 * mood.count / most_mood_entries) | round(1) }}%"></span>
+                </span>
+                <span class="mood-bar-count">{{ mood.count }}</span>
+            </li>
             {% endfor %}
-        </section>
-        <section class="insights-card insights-reflection" aria-labelledby="top-question-heading">
-            <div class="insights-card-heading">
-                <h2 id="top-question-heading">Most consistently answered reflection question</h2>
-                <i data-lucide="message-circle" aria-hidden="true"></i>
-            </div>
-            {% if top_questions %}
-                {% if top_questions|length > 1 %}<p class="insights-description">A tie — you return to these questions equally often.</p>{% endif %}
-                <ul class="insights-questions">
-                {% for question in top_questions %}<li>{{ question }}</li>{% endfor %}
-                </ul>
-                <p class="insights-description">Answered in {{ top_question_count }} {{ 'entry' if top_question_count == 1 else 'entries' }}{% if top_questions|length > 1 %} each{% endif %}.</p>
-            {% else %}
-                <p class="insights-question-empty">No reflections yet</p>
-                <p class="insights-description">Try one optional reflection question the next time you write.</p>
-                {% if total_entries %}<a class="insights-write-link" href="{{ url_for('write_journal') }}">Write and reflect <i data-lucide="arrow-right" aria-hidden="true"></i></a>{% endif %}
-            {% endif %}
-        </section>
-    </main>
-    <script>lucide.createIcons();</script>
-</body>
-</html>
+        </ul>
+    </section>
+
+    <section class="panel" aria-labelledby="top-question-heading">
+        <h2 id="top-question-heading" class="panel-title">Reflection</h2>
+        <p class="reflection-rate">
+            <strong>{{ '%.1f'|format(reflection_rate) }}%</strong>
+            of entries include a reflection ({{ reflection_entries }} of {{ total_entries }}).
+        </p>
+        <div class="reflection-meter" aria-hidden="true">
+            <span style="width: {{ reflection_rate | round(1) }}%"></span>
+        </div>
+        {% if top_questions %}
+            <h3 class="subhead">
+                {% if top_questions|length > 1 %}Questions you answer most (tied){% else %}Question you answer most{% endif %}
+            </h3>
+            <ul class="insights-questions">
+            {% for question in top_questions %}<li>{{ question }}</li>{% endfor %}
+            </ul>
+            <p class="stat-note">Answered in {{ top_question_count }} {{ 'entry' if top_question_count == 1 else 'entries' }}{% if top_questions|length > 1 %} each{% endif %}.</p>
+        {% else %}
+            <p class="insights-question-empty">No reflections yet</p>
+            <p class="stat-note">Open “Daily reflection” under your entry next time you write.</p>
+            {% if total_entries %}<a class="text-link" href="{{ url_for('write_journal') }}">Write and reflect</a>{% endif %}
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
