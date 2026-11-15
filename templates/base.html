@@ -37,10 +37,11 @@
             </a>
             {% endfor %}
         </nav>
-        <p class="sidebar-note">
-            <i data-lucide="lock" aria-hidden="true"></i>
-            Stored only on this computer
-        </p>
+        <a class="sidebar-note {% if active == 'backup' %}active{% endif %}" href="{{ url_for('backup_page') }}"
+           {% if active == 'backup' %}aria-current="page"{% endif %}>
+            <i data-lucide="database-backup" aria-hidden="true"></i>
+            <span>Backup &amp; export</span>
+        </a>
     </aside>
 
     <main id="main" class="main {% block main_class %}{% endblock %}" tabindex="-1">

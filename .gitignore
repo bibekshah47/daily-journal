@@ -21,3 +21,6 @@ __pycache__/
 
 # VS Code local settings
 .vscode/
+
+# Automatic daily database backups (private journal copies)
+backups/

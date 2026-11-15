@@ -1,7 +1,8 @@
 
 # Import Flask tools for creating pages and handling forms
 from flask import (Flask, render_template, request, redirect, url_for,
-                   flash, abort)
+                   flash, abort, send_file)
+from werkzeug.exceptions import RequestEntityTooLarge
 
 # Import date and time tools
 from datetime import date, datetime, timedelta
@@ -11,7 +12,13 @@ import sqlite3
 import calendar
 import os
 import secrets
+import io
+import threading
 from database import initialize_database
+from backup import (RestoreError, database_bytes, entries_to_json,
+                    entries_to_markdown, backup_folder, latest_backup_time,
+                    parse_backup, restore_entries, restore_message,
+                    run_daily_backup)
 from rich_text import prepare_content, safe_journal_html
 from journal_insights import get_journal_stats
 
@@ -27,6 +34,10 @@ app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(16)
 # Allow isolated databases for testing and explicit upgrades.
 app.config["DATABASE"] = os.environ.get("JOURNAL_DATABASE", "journal.db")
 
+# Largest upload accepted (the JSON restore file).
+MAX_UPLOAD_MB = 10
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+
 @app.cli.command("init-db")
 def init_db_command():
     """Add missing schema columns without replacing existing data."""
@@ -38,6 +49,35 @@ def init_db_command():
 def ensure_database_schema():
     """Upgrade the configured database before any route reads or writes it."""
     initialize_database(app.config["DATABASE"])
+
+
+# (database path, day) pairs whose daily backup has already been handled.
+_daily_backups_checked = set()
+_daily_backup_lock = threading.Lock()
+
+
+@app.before_request
+def ensure_daily_backup():
+    """On the first request each day, save a dated copy to backups/.
+
+    A failed backup is logged and never stops the page from loading. It is
+    not retried until the next day (or a server restart), so a persistent
+    problem doesn't slow down or spam every request.
+    """
+    if request.endpoint == "static":
+        return
+    database_path = app.config["DATABASE"]
+    key = (os.path.abspath(database_path), date.today())
+    if key in _daily_backups_checked:
+        return
+    with _daily_backup_lock:
+        if key in _daily_backups_checked:
+            return
+        try:
+            run_daily_backup(database_path, key[1])
+        except Exception:
+            app.logger.exception("Automatic daily backup failed")
+        _daily_backups_checked.add(key)
 
 
 app.jinja_env.filters["journal_html"] = safe_journal_html
@@ -94,7 +134,16 @@ def friendly_time(value):
     return moment.strftime("%I:%M %p").lstrip("0")
 
 
+def short_date(value):
+    """"Nov 3, 2026" for tight spaces such as the backup page stats."""
+    moment = parse_timestamp(value) if isinstance(value, str) else value
+    if not moment:
+        return value or ""
+    return moment.strftime("%b %d, %Y").replace(" 0", " ")
+
+
 app.jinja_env.filters["friendly_date"] = friendly_date
+app.jinja_env.filters["short_date"] = short_date
 app.jinja_env.filters["friendly_time"] = friendly_time
 
 
@@ -518,6 +567,112 @@ def write_journal():
         prompt=WRITING_PROMPTS[date.today().toordinal() % len(WRITING_PROMPTS)],
         **{field: "" for field in REFLECTION_FIELDS}
     )
+
+
+# Backup & export
+def render_backup_page(error=None, status=200):
+    connection = sqlite3.connect(app.config["DATABASE"])
+    try:
+        total, oldest, newest = connection.execute(
+            "SELECT COUNT(*), MIN(created_at), MAX(created_at) FROM entries"
+        ).fetchone()
+    finally:
+        connection.close()
+    try:
+        last_backup = latest_backup_time(app.config["DATABASE"])
+    except OSError:
+        last_backup = None
+    return render_template(
+        "backup.html",
+        error=error,
+        total_entries=total,
+        oldest_entry=oldest,
+        newest_entry=newest,
+        last_backup=last_backup,
+        backup_folder=backup_folder(app.config["DATABASE"]),
+        max_upload_mb=MAX_UPLOAD_MB,
+    ), status
+
+
+def all_entries_newest_first():
+    connection = get_connection()
+    try:
+        return connection.execute(
+            "SELECT * FROM entries ORDER BY created_at DESC, id DESC"
+        ).fetchall()
+    finally:
+        connection.close()
+
+
+def download_response(data, extension, mimetype, when):
+    response = send_file(
+        io.BytesIO(data), mimetype=mimetype, as_attachment=True,
+        download_name=f"my-journal-{when.date().isoformat()}.{extension}",
+    )
+    # Private data: don't let the browser or a proxy keep a copy.
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/backup")
+def backup_page():
+    return render_backup_page()
+
+
+@app.route("/backup/export.md")
+def export_markdown():
+    now = datetime.now()
+    text = entries_to_markdown(all_entries_newest_first(), now)
+    return download_response(text.encode("utf-8"), "md",
+                             "text/markdown", now)
+
+
+@app.route("/backup/export.json")
+def export_json():
+    now = datetime.now()
+    text = entries_to_json(all_entries_newest_first(), now)
+    return download_response(text.encode("utf-8"), "json",
+                             "application/json", now)
+
+
+@app.route("/backup/export.db")
+def export_database():
+    now = datetime.now()
+    return download_response(database_bytes(app.config["DATABASE"]), "db",
+                             "application/vnd.sqlite3", now)
+
+
+@app.route("/backup/restore", methods=["POST"])
+def restore_backup():
+    upload = request.files.get("backup_file")
+    if upload is None or not upload.filename:
+        return render_backup_page("Choose a .json backup file to restore.", 400)
+    if not upload.filename.lower().endswith(".json"):
+        return render_backup_page(
+            "Only .json backups can be restored. Markdown and database "
+            "downloads can't be restored here.", 400)
+    try:
+        entries = parse_backup(upload.read())
+    except RestoreError as error:
+        return render_backup_page(str(error), 400)
+
+    connection = sqlite3.connect(app.config["DATABASE"])
+    try:
+        added, skipped = restore_entries(connection, entries)
+    finally:
+        connection.close()
+
+    flash(restore_message(added, skipped))
+    return redirect(url_for("backup_page"))
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def upload_too_large(error):
+    if request.endpoint == "restore_backup":
+        return render_backup_page(
+            f"That file is larger than {MAX_UPLOAD_MB} MB, so it can't be restored.",
+            413)
+    return error
 
 
 @app.errorhandler(404)
