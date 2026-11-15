@@ -213,7 +213,6 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.75; flex-shrink: 0; }
 .main {
     margin-left: var(--sidebar-width);
     padding: 48px 40px 96px;
-    max-width: calc(var(--sidebar-width) + 800px);
     outline: none;
 }
 .main > * { max-width: 720px; margin-left: auto; margin-right: auto; }
@@ -340,6 +339,13 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.75; flex-shrink: 0; }
     font-size: var(--text-sm);
     font-weight: 500;
     text-decoration: none;
+}
+/* A back link placed directly in .main is inline, so auto margins can't center it;
+   make it a shrink-wrapped block aligned to the left edge of the centered column. */
+.main > .back-link {
+    display: flex;
+    width: fit-content;
+    margin-left: max(0px, calc((100% - 720px) / 2));
 }
 .back-link:hover { color: var(--ink); }
 .back-link svg.lucide { width: 16px; height: 16px; }
