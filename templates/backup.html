@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% set active_page = 'backup' %}
+
+{% block title %}Backup & export{% endblock %}
+{% block main_class %}backup-page{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Backup &amp; export</h1>
+    <p class="page-subtitle">Your journal is stored only on this computer. Download a copy now and then, and keep it somewhere safe.</p>
+</header>
+
+{% if error %}
+<div class="form-error" role="alert">
+    <i data-lucide="circle-alert" aria-hidden="true"></i>
+    <span>Couldn’t restore: {{ error }}</span>
+</div>
+{% endif %}
+
+<section class="stat-band" aria-label="Your journal">
+    <div class="stat">
+        <p class="stat-value">{{ total_entries }}</p>
+        <h2 class="stat-label">{{ 'Entry' if total_entries == 1 else 'Entries' }}</h2>
+    </div>
+    <div class="stat">
+        <p class="stat-value">{{ oldest_entry|short_date if oldest_entry else '—' }}</p>
+        <h2 class="stat-label">Oldest entry</h2>
+    </div>
+    <div class="stat">
+        <p class="stat-value">{{ newest_entry|short_date if newest_entry else '—' }}</p>
+        <h2 class="stat-label">Newest entry</h2>
+    </div>
+    <div class="stat">
+        <p class="stat-value">{{ last_backup|short_date if last_backup else 'Not yet' }}</p>
+        <h2 class="stat-label">Last automatic backup</h2>
+        {% if last_backup %}<p class="stat-note">at {{ last_backup|friendly_time }}</p>{% endif %}
+    </div>
+</section>
+
+<p class="backup-note">
+    <i data-lucide="database-backup" aria-hidden="true"></i>
+    <span>Once a day, a copy of your journal is saved automatically to <code>{{ backup_folder }}</code>. The newest 14 are kept.</span>
+</p>
+
+{% if total_entries %}
+<section class="panel backup-panel" aria-labelledby="download-heading">
+    <h2 id="download-heading" class="panel-title">Download a copy</h2>
+    <ul class="download-list">
+        <li class="download-row">
+            <div class="download-text">
+                <h3>Markdown</h3>
+                <p>Easy to read in any text editor. Newest entries first, with moods and reflections.</p>
+            </div>
+            <a class="button button-secondary" href="{{ url_for('export_markdown') }}" download>
+                <i data-lucide="file-text" aria-hidden="true"></i>
+                Download .md
+            </a>
+        </li>
+        <li class="download-row">
+            <div class="download-text">
+                <h3>JSON</h3>
+                <p>Every detail of every entry. This is the file you can restore from later.</p>
+            </div>
+            <a class="button button-secondary" href="{{ url_for('export_json') }}" download>
+                <i data-lucide="file-json" aria-hidden="true"></i>
+                Download .json
+            </a>
+        </li>
+        <li class="download-row">
+            <div class="download-text">
+                <h3>Database</h3>
+                <p>An exact copy of the SQLite database file, for a complete backup.</p>
+            </div>
+            <a class="button button-secondary" href="{{ url_for('export_database') }}" download>
+                <i data-lucide="database" aria-hidden="true"></i>
+                Download .db
+            </a>
+        </li>
+    </ul>
+</section>
+{% else %}
+<div class="empty-state">
+    <i data-lucide="archive" aria-hidden="true"></i>
+    <h2>Nothing to back up yet</h2>
+    <p>Write your first entry, or restore a JSON backup below.</p>
+    <a href="{{ url_for('write_journal') }}" class="button button-primary">Write your first entry</a>
+</div>
+{% endif %}
+
+<section class="panel backup-panel" aria-labelledby="restore-heading">
+    <h2 id="restore-heading" class="panel-title">Restore from a JSON backup</h2>
+    <p class="panel-text">Adds the entries from a JSON backup that aren’t already here. Nothing is overwritten or deleted.</p>
+    <form class="restore-form" method="post" action="{{ url_for('restore_backup') }}" enctype="multipart/form-data">
+        <label for="backup-file">Backup file <span>(.json, up to {{ max_upload_mb }} MB)</span></label>
+        <div class="restore-controls">
+            <input type="file" id="backup-file" name="backup_file" accept=".json,application/json" required>
+            <button type="submit" class="button button-primary">
+                <i data-lucide="archive-restore" aria-hidden="true"></i>
+                Restore
+            </button>
+        </div>
+    </form>
+</section>
+{% endblock %}

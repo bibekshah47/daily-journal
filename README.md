@@ -30,6 +30,19 @@ runs at http://127.0.0.1:5001.
 formatting and is NULL on legacy entries. Legacy content is never interpreted as
 HTML. Sanitization runs on submission and when rendering formatted content.
 
+## Backup & export
+
+The **Backup & export** link at the bottom of the sidebar opens `/backup`, which
+offers three downloads: a readable Markdown file, a JSON file with every column of
+every entry, and an exact copy of the SQLite database. A JSON export can be
+restored on the same page. Restoring only adds entries that aren't already present
+(same `created_at` and `content`); it never overwrites or deletes anything.
+
+On the first request each day the app also copies the database to
+`backups/journal-YYYY-MM-DD.db`, next to the database file, and keeps the newest 14.
+A failed backup is logged and never stops a page from loading. The `backups/`
+folder is ignored by git.
+
 ## Manual checks
 
 1. Write an entry with bold, italic, underline, headings, both list types, a quote,
