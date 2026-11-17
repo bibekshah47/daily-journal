@@ -9,9 +9,11 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/quill/quill.snow.css') }}">
 <script defer src="{{ url_for('static', filename='vendor/quill/quill.js') }}"></script>
 <script defer src="{{ url_for('static', filename='journal-editor.js') }}"></script>
+<script defer src="{{ url_for('static', filename='write-extras.js') }}"></script>
 {% endblock %}
 
 {% block content %}
+{{ ui.focus_mode_early() }}
 <form method="POST" action="{{ url_for('write_journal') }}" class="compose" id="write-form">
 
     <header class="compose-header">
@@ -33,6 +35,17 @@
 
     {{ ui.tag_field(tags, tag_suggestions) }}
 
+    <!-- Starting templates; shown by write-extras.js only while the entry is empty -->
+    <div class="template-picker" id="template-picker" hidden>
+        <span class="template-picker-label" id="template-picker-label">Start from:</span>
+        <ul class="template-options" aria-labelledby="template-picker-label">
+            {% for template in writing_templates %}
+            <li><button type="button" class="template-option" data-template="{{ template.key }}">{{ template.name }}</button></li>
+            {% endfor %}
+        </ul>
+    </div>
+    <script type="application/json" id="writing-templates">{{ writing_templates | tojson }}</script>
+
     {{ ui.editor_fields(content, content_html, prompt) }}
 
     {{ ui.reflection_fields(went_well, went_wrong, improve_tomorrow) }}
@@ -44,6 +57,7 @@
             <span id="autosave-status" role="status" aria-live="polite">Drafts save automatically</span>
         </div>
         <div class="compose-actions">
+            {{ ui.focus_toggle() }}
             <button type="button" id="discard-draft" class="button button-quiet">
                 Discard draft
             </button>
@@ -55,6 +69,16 @@
         </div>
     </div>
 </form>
+
+<!-- Asked before a template replaces text already written -->
+<dialog class="dialog" id="template-dialog" aria-labelledby="template-dialog-title">
+    <h2 id="template-dialog-title">Replace your writing?</h2>
+    <p>Replace what you've written with the <span id="template-dialog-name"></span> template?</p>
+    <div class="dialog-actions">
+        <button type="button" class="button button-quiet" id="template-cancel" autofocus>Cancel</button>
+        <button type="button" class="button button-primary" id="template-replace">Replace</button>
+    </div>
+</dialog>
 {% endblock %}
 
 {% block scripts %}

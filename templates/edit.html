@@ -9,9 +9,11 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/quill/quill.snow.css') }}">
 <script defer src="{{ url_for('static', filename='vendor/quill/quill.js') }}"></script>
 <script defer src="{{ url_for('static', filename='journal-editor.js') }}"></script>
+<script defer src="{{ url_for('static', filename='write-extras.js') }}"></script>
 {% endblock %}
 
 {% block content %}
+{{ ui.focus_mode_early() }}
 <a href="{{ url_for('view_entry', entry_id=entry['id']) }}" class="back-link">
     <i data-lucide="arrow-left" aria-hidden="true"></i>
     Back to entry
@@ -49,6 +51,7 @@
             <span id="edit-status" role="status" aria-live="polite">No changes yet</span>
         </div>
         <div class="compose-actions">
+            {{ ui.focus_toggle() }}
             <a href="{{ url_for('view_entry', entry_id=entry['id']) }}" class="button button-quiet">Cancel</a>
             <button type="submit" class="button button-primary" title="Save changes (Ctrl+S)">
                 <i data-lucide="check" aria-hidden="true"></i>

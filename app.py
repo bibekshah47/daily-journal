@@ -24,6 +24,7 @@ from journal_insights import REFLECTION_QUESTIONS, get_journal_stats
 from memories import get_memories
 from tags import (all_tags_with_counts, get_tags_for_entries, normalize_tag,
                   parse_tags, set_entry_tags)
+from templates_data import WRITING_TEMPLATES
 from trash import TRASH_DAYS, cleanup_trash, empty_trash, purge_entry
 from weekly import get_week_review, week_bounds, week_label
 
@@ -742,6 +743,7 @@ def write_journal():
                 content=content,
                 content_html=content_html,
                 prompt=WRITING_PROMPTS[date.today().toordinal() % len(WRITING_PROMPTS)],
+                writing_templates=WRITING_TEMPLATES,
                 **reflections
             ), 400
 
@@ -774,6 +776,7 @@ def write_journal():
         tag_suggestions=tag_suggestions(),
         content="",
         prompt=WRITING_PROMPTS[date.today().toordinal() % len(WRITING_PROMPTS)],
+        writing_templates=WRITING_TEMPLATES,
         **{field: "" for field in REFLECTION_FIELDS}
     )
 

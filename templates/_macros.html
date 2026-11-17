@@ -272,3 +272,24 @@
     })();
 </script>
 {% endmacro %}
+
+
+{# Focus mode (Write and Edit). Applied before the page paints so a remembered
+   focus mode doesn't flash the sidebar; static/write-extras.js does the rest. #}
+{% macro focus_mode_early() %}
+<script>
+    try {
+        if (localStorage.getItem("my-journal-focus-mode") === "on") document.body.classList.add("focus-mode");
+    } catch (error) {}
+</script>
+{% endmacro %}
+
+
+{% macro focus_toggle() %}
+<button type="button" class="button button-quiet focus-toggle" id="focus-toggle"
+        aria-pressed="false" title="Focus (Ctrl+Shift+F)">
+    <i data-lucide="maximize-2" class="focus-icon-enter" aria-hidden="true"></i>
+    <i data-lucide="minimize-2" class="focus-icon-exit" aria-hidden="true"></i>
+    <span id="focus-toggle-label">Focus</span>
+</button>
+{% endmacro %}

@@ -866,6 +866,79 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
 }
 
 
+/* "Start from:" template line (Write page, empty entry only) */
+.template-picker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    margin: -4px 0 12px;
+    font-size: var(--text-sm);
+    color: var(--ink-faint);
+}
+.template-picker[hidden] { display: none; }
+.template-options { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; }
+.template-option {
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+}
+.template-option:hover { text-decoration: underline; }
+
+/* Focus mode: just the title, the editor and a slim save bar */
+.focus-icon-exit { display: none; }
+.focus-mode .focus-icon-enter { display: none; }
+.focus-mode .focus-icon-exit { display: inline; }
+
+.focus-mode .sidebar,
+.focus-mode .write-page .back-link,
+.focus-mode .compose-date,
+.focus-mode .mood-picker,
+.focus-mode .tag-field,
+.focus-mode .daily-reflection,
+.focus-mode .template-picker,
+.focus-mode #discard-draft,
+.focus-mode .compose-actions > a.button { display: none; }
+/* Status messages stay in the page for screen readers, just not on screen. */
+.focus-mode #autosave-status,
+.focus-mode #edit-status {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+.focus-mode .main.write-page { margin-left: 0; padding-top: 88px; }
+.focus-mode .main.write-page > * { max-width: 680px; }
+.focus-mode .compose-bar { padding-block: 8px; }
+.focus-mode .ql-toolbar.ql-snow { opacity: 0.3; }
+.focus-mode .ql-toolbar.ql-snow:hover,
+.focus-mode .ql-toolbar.ql-snow:focus-within,
+.focus-mode .editor-field:focus-within .ql-toolbar.ql-snow { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+    .ql-toolbar.ql-snow { transition: opacity 0.2s; }
+}
+@media (min-width: 761px) { .focus-mode .toast-region { left: 50%; } }
+/* Narrow phones: "Focus" becomes icon-only so it fits beside Discard and Save. */
+@media (max-width: 520px) {
+    body:not(.focus-mode) .focus-toggle { padding-inline: 10px; }
+    body:not(.focus-mode) #focus-toggle-label {
+        position: absolute;
+        width: 1px; height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+}
+@media (max-width: 760px) {
+    .focus-mode .main.write-page { padding: 40px 18px 40px; }
+    .focus-mode .compose-bar { bottom: 0; }
+}
+
 /* ---------- 5c. History ---------- */
 
 .history-layout {

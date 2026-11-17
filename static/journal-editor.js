@@ -66,7 +66,22 @@
     }
     window.journalEditor = {
         getDelta: () => editor.getContents(),
-        clear: () => { editor.setText(''); sync(); }
+        clear: () => { editor.setText(''); sync(); },
+        focus: () => editor.focus(),
+        // Replace everything with trusted template HTML as a user edit (so the
+        // draft autosaves), then put the cursor on the first empty line.
+        loadHTML: html => {
+            const delta = editor.clipboard.convert({ html });
+            // convert() strips a final plain newline (meant for pasting), which
+            // would swallow a template's closing empty paragraph. Put it back.
+            if (/<p>\s*<\/p>\s*$/.test(html)) delta.insert('\n');
+            editor.setContents(delta, 'user');
+            const text = editor.getText();
+            const empty = /(^|\n)\n/.exec(text);
+            const index = empty ? empty.index + empty[1].length : Math.max(0, text.length - 1);
+            editor.focus();
+            editor.setSelection(index, 0, 'user');
+        }
     };
     sync();
     // Refresh word count without scheduling a new draft on page load.
