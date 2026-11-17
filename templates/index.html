@@ -48,6 +48,30 @@
     {% endif %}
 </section>
 
+{% if memories %}
+<!-- ON THIS DAY: what you wrote a week, a month or years ago -->
+<section class="section" aria-labelledby="memories-heading">
+    <div class="section-heading">
+        <h2 id="memories-heading">On this day</h2>
+    </div>
+    <div class="entry-list">
+        {% for memory in memories %}
+        {% set entry = memory.entry %}
+        <a href="{{ url_for('view_entry', entry_id=entry.id) }}"
+           class="entry-row {% if entry.mood in mood_lookup %}mood-{{ mood_lookup[entry.mood].key }}{% endif %}">
+            <div class="entry-row-meta">
+                <span>{{ memory.label }} · {{ entry.created_at | short_date }}</span>
+                {{ ui.mood_badge(entry.mood) }}
+            </div>
+            <h3 class="entry-row-title">{{ entry.title or (entry.created_at | friendly_date) }}</h3>
+            <p class="entry-row-preview">{{ entry.content | truncate(160) }}</p>
+            {{ ui.tag_pills(entry.tags, class="entry-row-tags") }}
+        </a>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
 {% if total_entries %}
 <!-- LAST TWO WEEKS: one dot per day, colored by mood -->
 <section class="section" aria-labelledby="fortnight-heading">

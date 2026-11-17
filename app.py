@@ -21,6 +21,7 @@ from backup import (RestoreError, database_bytes, entries_to_json,
                     run_daily_backup)
 from rich_text import prepare_content, safe_journal_html
 from journal_insights import get_journal_stats
+from memories import get_memories
 from tags import (all_tags_with_counts, delete_unused_tags, get_tags_for_entries,
                   normalize_tag, parse_tags, set_entry_tags)
 
@@ -236,6 +237,9 @@ def home():
         ORDER BY created_at DESC LIMIT 1
     """, (today.isoformat(),)).fetchone()
 
+    # "On this day": entries from a week, a month, months and years ago
+    memories = get_memories(connection, today)
+
     # Moods for the last 14 days (latest entry of each day)
     start = today - timedelta(days=13)
     mood_rows = connection.execute("""
@@ -271,6 +275,7 @@ def home():
         current_streak=stats["current_streak"],
         recent_entries=recent_entries,
         today_entry=today_entry,
+        memories=memories,
         last_two_weeks=last_two_weeks,
         prompt=prompt,
     )
