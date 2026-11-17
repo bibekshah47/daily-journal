@@ -8,11 +8,12 @@ REFLECTION_QUESTIONS = (
 )
 
 
-def get_journal_stats(connection, today=None):
+def get_journal_stats(connection, today=None, *, user_id):
     today = today or date.today()
     rows = connection.execute('''
         SELECT created_at, went_well, went_wrong, improve_tomorrow FROM live_entries
-    ''').fetchall()
+        WHERE user_id = ?
+    ''', (user_id,)).fetchall()
     dates = set()
     monthly_entries = 0
     reflection_entries = 0

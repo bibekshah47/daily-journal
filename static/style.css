@@ -216,6 +216,42 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.75; flex-shrink: 0; }
 .sidebar-note.active svg.lucide { color: var(--accent); }
 .sidebar-note svg.lucide { width: 14px; height: 14px; }
 
+/* Signed-in account, under Backup & export */
+.sidebar-account {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 10px;
+    padding: 10px 12px 0;
+    border-top: 1px solid var(--rule);
+    min-width: 0;
+}
+.sidebar-email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-xs);
+    color: var(--ink-soft);
+}
+.sidebar-logout { font-size: var(--text-xs); }
+
+/* A button that looks like a text link (Log out, Show password) */
+.text-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+}
+.text-button:hover { text-decoration: underline; }
+.text-button[hidden] { display: none; }
+
+/* Logged-out pages (log in, sign up, 404) have no sidebar or tab bar */
+.no-sidebar .main { margin-left: 0; }
+
 .main {
     margin-left: var(--sidebar-width);
     padding: 48px 40px 96px;
@@ -237,7 +273,7 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.75; flex-shrink: 0; }
         background: color-mix(in srgb, var(--paper) 92%, transparent);
         backdrop-filter: blur(12px);
     }
-    .brand, .sidebar-note { display: none; }
+    .brand, .sidebar-note, .sidebar-account { display: none; }
     .nav { flex-direction: row; flex: 1; justify-content: space-around; }
     .nav-link {
         flex: 1;
@@ -254,6 +290,7 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.75; flex-shrink: 0; }
         margin-left: 0;
         padding: 28px 18px calc(var(--tabbar-height) + 40px);
     }
+    .no-sidebar .main { padding-bottom: 40px; }
 }
 
 
@@ -535,6 +572,8 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 @media (min-width: 761px) { .toast-region { left: calc(50% + var(--sidebar-width) / 2); } }
 @media (max-width: 760px) { .toast-region { bottom: calc(var(--tabbar-height) + 20px); } }
+@media (min-width: 761px) { .no-sidebar .toast-region { left: 50%; } }
+@media (max-width: 760px) { .no-sidebar .toast-region { bottom: 20px; } }
 
 /* Dialog */
 .dialog {
@@ -553,6 +592,14 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
 
 
 /* ---------- 5a. Home ---------- */
+
+/* Phones have no sidebar, so Home's header carries Log out */
+.home-page .page-header { position: relative; }
+.mobile-logout { display: none; }
+@media (max-width: 760px) {
+    .mobile-logout { display: block; position: absolute; top: 0; right: 0; }
+    .mobile-logout .text-button { font-size: var(--text-xs); padding: 4px 0 4px 8px; }
+}
 
 .home-page .page-header h1 { font-size: var(--text-2xl); }
 
@@ -937,6 +984,51 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
 @media (max-width: 760px) {
     .focus-mode .main.write-page { padding: 40px 18px 40px; }
     .focus-mode .compose-bar { bottom: 0; }
+}
+
+
+/* ---------- 5g. Log in & sign up ---------- */
+
+.main.auth-page { display: grid; place-items: center; min-height: 100vh; padding-top: 40px; }
+.main.auth-page > * { width: 100%; max-width: 400px; }
+.auth-card {
+    padding: 32px 28px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+}
+.auth-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; font-family: var(--font-read); font-weight: 600; color: var(--ink-soft); }
+.auth-brand svg.lucide { width: 20px; height: 20px; color: var(--accent); }
+.auth-card h1 { font-family: var(--font-read); font-size: var(--text-2xl); font-weight: 600; letter-spacing: -0.02em; margin-bottom: 22px; }
+.auth-form { display: flex; flex-direction: column; gap: 18px; }
+.auth-form .form-error { margin: 0; }
+.auth-field label { display: block; margin-bottom: 6px; font-size: var(--text-sm); font-weight: 600; }
+.auth-field input {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 14px;
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius-sm);
+    background: var(--paper);
+    color: var(--ink);
+    font: inherit;
+}
+.auth-field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.auth-field input[aria-invalid="true"] { border-color: var(--danger); }
+.password-box { position: relative; }
+.password-box input { padding-right: 120px; }
+.password-toggle { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); font-size: var(--text-xs); }
+.field-error { display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; font-size: var(--text-sm); color: var(--danger); }
+.field-error svg.lucide { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.field-error a { color: inherit; font-weight: 600; }
+.auth-check { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); cursor: pointer; }
+.auth-check input { width: 18px; height: 18px; accent-color: var(--accent); }
+.auth-submit { width: 100%; min-height: 44px; }
+.auth-switch { margin-top: 20px; text-align: center; font-size: var(--text-sm); color: var(--ink-soft); }
+.auth-switch a { font-weight: 600; }
+@media (max-width: 760px) {
+    .main.auth-page { min-height: auto; padding-top: 32px; }
+    .auth-card { padding: 26px 20px; }
 }
 
 /* ---------- 5c. History ---------- */

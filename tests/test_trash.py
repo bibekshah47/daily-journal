@@ -18,6 +18,7 @@ from journal_insights import get_journal_stats
 from memories import get_memories, subtract_months
 from tags import all_tags_with_counts, set_entry_tags
 from trash import cleanup_trash
+from tests.helpers import signed_in_client
 
 
 class TrashTests(unittest.TestCase):
@@ -54,7 +55,7 @@ class TrashTests(unittest.TestCase):
 
     def use_database(self, path):
         self.app.config.update(TESTING=True, DATABASE=path)
-        self.client = self.app.test_client()
+        self.client, self.user_id = signed_in_client(self.app, path)
         # Skip the once-a-day backup/cleanup hook unless a test asks for it.
         self.module._daily_backups_checked.add((os.path.abspath(path), date.today()))
 
@@ -63,11 +64,11 @@ class TrashTests(unittest.TestCase):
         db = connect(self.path)
         try:
             cursor = db.execute(
-                'INSERT INTO entries (title, content, mood, created_at, deleted_at) '
-                'VALUES (?, ?, ?, ?, ?)', (title, content, mood, created_at, deleted_at))
+                'INSERT INTO entries (title, content, mood, created_at, deleted_at, user_id) '
+                'VALUES (?, ?, ?, ?, ?, ?)', (title, content, mood, created_at, deleted_at, self.user_id))
             entry_id = cursor.lastrowid
             if tags:
-                set_entry_tags(db, entry_id, tags)
+                set_entry_tags(db, entry_id, tags, user_id=self.user_id)
             db.commit()
             return entry_id
         finally:
@@ -156,9 +157,9 @@ class TrashTests(unittest.TestCase):
                                  history)
             db = connect(self.path)
             try:
-                stats = get_journal_stats(db)
-                memories = [m['entry']['id'] for m in get_memories(db, date.today())]
-                tag_names = [t['name'] for t in all_tags_with_counts(db)]
+                stats = get_journal_stats(db, user_id=self.user_id)
+                memories = [m['entry']['id'] for m in get_memories(db, date.today(), user_id=self.user_id)]
+                tag_names = [t['name'] for t in all_tags_with_counts(db, user_id=self.user_id)]
             finally:
                 db.close()
             insights = self.client.get('/insights').text
@@ -203,17 +204,6 @@ class TrashTests(unittest.TestCase):
         page = self.client.get(f'/entry/{first}').text
         self.assertIn(f'href="/entry/{last}" class="pager-link pager-newer"', page)
         self.assertNotIn(f'/entry/{middle}"', page)
-
-    def test_database_export_stays_an_exact_copy(self):
-        entry_id = self.add('Words', '2026-11-01T09:00:00', deleted_at='2026-11-02T09:00:00')
-        copy = Path(self.tmp.name) / 'copy.db'
-        copy.write_bytes(self.client.get('/backup/export.db').data)
-        db = sqlite3.connect(copy)
-        try:
-            self.assertEqual(db.execute('SELECT deleted_at FROM entries WHERE id = ?', (entry_id,)).fetchone()[0],
-                             '2026-11-02T09:00:00')
-        finally:
-            db.close()
 
     # ---------- entry and edit pages ----------
 

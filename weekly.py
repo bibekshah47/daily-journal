@@ -29,15 +29,15 @@ def week_label(start):
     return f"{first} – {end.day}, {end.year}"
 
 
-def get_week_review(connection, start):
-    """Everything the /week page shows for the week starting on Sunday `start`."""
+def get_week_review(connection, start, *, user_id):
+    """Everything the /week page shows for user_id's week starting on Sunday `start`."""
     start, end = week_bounds(start)
     rows = connection.execute(f"""
         SELECT {", ".join(_COLUMNS)}, date(created_at)
         FROM live_entries
-        WHERE date(created_at) BETWEEN ? AND ?
+        WHERE user_id = ? AND date(created_at) BETWEEN ? AND ?
         ORDER BY created_at, id
-    """, (start.isoformat(), end.isoformat())).fetchall()
+    """, (user_id, start.isoformat(), end.isoformat())).fetchall()
     entries = [dict(zip(_COLUMNS, row[:-1]), day=date.fromisoformat(row[-1]))
                for row in rows]
 
@@ -56,7 +56,7 @@ def get_week_review(connection, start):
             if answer:
                 reflections[field].append((entry["day"], answer))
 
-    tags = get_tags_for_entries(connection, [entry["id"] for entry in entries])
+    tags = get_tags_for_entries(connection, [entry["id"] for entry in entries], user_id=user_id)
     tag_counts = {}
     for entry in entries:
         entry["tags"] = tags[entry["id"]]

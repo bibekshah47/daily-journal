@@ -6,7 +6,7 @@ from flask import Blueprint, render_template, request
 
 from db import get_db
 from tags import normalize_tag
-from views.shared import attach_tags, entry_summary, parse_timestamp, trash_count
+from views.shared import attach_tags, entry_summary, parse_timestamp, trash_count, user_id
 
 bp = Blueprint("history", __name__)
 
@@ -54,20 +54,22 @@ def history():
         next_month = f"{current_year}-{current_month + 1:02d}"
 
     connection = get_db()
+    me = user_id()
 
     # Dates that contain journal entries, with the mood of the latest one
     calendar_moods = {}
     for row in connection.execute("""
         SELECT date(created_at) AS entry_date, mood
         FROM live_entries
+        WHERE user_id = ?
         ORDER BY created_at
-    """).fetchall():
+    """, (me,)).fetchall():
         calendar_moods[row["entry_date"]] = row["mood"] or ""
     calendar_entry_dates = set(calendar_moods)
 
     # Build the journal search query from fixed SQL pieces; every value is a ? parameter.
-    query = "SELECT * FROM live_entries WHERE 1=1"
-    parameters = []
+    query = "SELECT * FROM live_entries WHERE user_id = ?"
+    parameters = [me]
 
     if favorites_only:
         query += " AND is_favorite = 1"
@@ -76,18 +78,18 @@ def history():
         query += """ AND (title LIKE ? OR content LIKE ? OR id IN (
             SELECT entry_tags.entry_id FROM entry_tags
             JOIN tags ON tags.id = entry_tags.tag_id
-            WHERE tags.name LIKE ?))"""
+            WHERE tags.user_id = ? AND tags.name LIKE ?))"""
         keyword = f"%{search_query}%"
         # "#work" should find the tag "work".
         tag_keyword = f"%{search_query.lstrip('#')}%"
-        parameters.extend([keyword, keyword, tag_keyword])
+        parameters.extend([keyword, keyword, me, tag_keyword])
 
     if active_tag:
         query += """ AND id IN (
             SELECT entry_tags.entry_id FROM entry_tags
             JOIN tags ON tags.id = entry_tags.tag_id
-            WHERE tags.name = ?)"""
-        parameters.append(active_tag)
+            WHERE tags.user_id = ? AND tags.name = ?)"""
+        parameters.extend([me, active_tag])
 
     if filter_date:
         query += " AND date(created_at) = ?"
@@ -97,7 +99,8 @@ def history():
 
     rows = connection.execute(query, parameters).fetchall()
 
-    total_entries = connection.execute("SELECT COUNT(*) FROM live_entries").fetchone()[0]
+    total_entries = connection.execute(
+        "SELECT COUNT(*) FROM live_entries WHERE user_id = ?", (me,)).fetchone()[0]
     trashed_entries = trash_count(connection)
     entries = attach_tags(connection, [entry_summary(row) for row in rows])
 

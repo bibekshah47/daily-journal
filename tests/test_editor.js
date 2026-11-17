@@ -5,7 +5,8 @@ const vm = require('node:vm');
 const editorCode = fs.readFileSync('static/journal-editor.js', 'utf8');
 const template = fs.readFileSync('templates/write.html', 'utf8');
 const draftCode = [...template.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1];
-function setup({stored, initial = '', html = '', fail = false} = {}) {
+const KEY = 'my-journal-new-entry-draft-7';   // the server puts the user id in the key
+function setup({stored, initial = '', html = '', fail = false, key = KEY, storage: shared} = {}) {
     const elements = {};
     function element(id) {
         return elements[id] ||= {
@@ -26,8 +27,9 @@ function setup({stored, initial = '', html = '', fail = false} = {}) {
     ['journal','journal-editor','journal-html','editor-format','initial-journal-html','word-count','write-form','title','mood','tags','went_well','went_wrong','improve_tomorrow','save-button','autosave-status','discard-draft','daily-reflection'].forEach(element);
     element('journal').value = initial;
     element('journal').form = element('write-form');
+    element('write-form').dataset = {draftKey: key};
     element('initial-journal-html').innerHTML = html;
-    const storage = new Map(stored ? [['my-journal-new-entry-draft', JSON.stringify(stored)]] : []);
+    const storage = shared || new Map(stored ? [[key, JSON.stringify(stored)]] : []);
     const session = new Map();
     let instance, backgroundFormat;
     class FakeQuill {
@@ -71,7 +73,7 @@ assert.equal(x.elements.journal.hidden,true);
 x.editor.setContents({ops:[{insert:'Formatted draft\n',attributes:{bold:true,background:"#fff2b2"}}]});
 x.elements.tags.value = 'work, family';
 x.save();
-let draft = JSON.parse(x.storage.get('my-journal-new-entry-draft'));
+let draft = JSON.parse(x.storage.get(KEY));
 assert.equal(draft.version,2);
 assert.equal(draft.tags,'work, family');
 assert.equal(draft.editorDelta.ops[0].attributes.bold,true);
@@ -83,12 +85,36 @@ assert.equal(x.editor.getContents().ops[0].attributes.background,'#fff2b2');
 x.elements['discard-draft'].dispatchEvent({type:'click'});
 assert.equal(x.editor.getText(),'');
 assert.equal(x.elements.tags.value,'');
-assert(!x.storage.has('my-journal-new-entry-draft'));
+assert(!x.storage.has(KEY));
 // Tags alone are worth keeping as a draft.
 x = setup();
 x.elements.tags.value = 'ideas';
 x.save();
-assert.equal(JSON.parse(x.storage.get('my-journal-new-entry-draft')).tags,'ideas');
+assert.equal(JSON.parse(x.storage.get(KEY)).tags,'ideas');
+// Two people on one computer: each has their own draft key and never sees the other's draft.
+const browser = new Map();
+x = setup({storage: browser, key: 'my-journal-new-entry-draft-7'});
+x.editor.setText('Seven private words');
+x.elements.title.value = 'Seven';
+x.save();
+assert(browser.has('my-journal-new-entry-draft-7'));
+x = setup({storage: browser, key: 'my-journal-new-entry-draft-8'});
+assert.equal(x.editor.getText(), '');                   // nothing of user 7's draft
+assert.equal(x.elements.title.value, '');
+assert.equal(x.elements['discard-draft'].hidden, true);
+x.elements.title.value = 'Eight';
+x.save();
+assert.equal(JSON.parse(browser.get('my-journal-new-entry-draft-7')).title, 'Seven');
+assert.equal(JSON.parse(browser.get('my-journal-new-entry-draft-8')).title, 'Eight');
+assert(!browser.has('my-journal-new-entry-draft'));        // the old shared key is never used
+x = setup({storage: browser, key: 'my-journal-new-entry-draft-7'});
+assert.equal(x.elements.title.value, 'Seven');
+// Without a key the page keeps no drafts at all rather than falling back to a shared one.
+const keyless = new Map();
+x = setup({storage: keyless, key: ''});
+x.elements.title.value = 'Nowhere';
+x.save();
+assert.equal(keyless.size, 0);
 x = setup({stored:{content:'Wrong'},initial:'Server answer',html:'<p>Server formatted</p>'});
 assert.equal(x.editor.getText(),'Server formatted\n');
 x = setup({initial:'Literal <b>text</b>'});
@@ -186,4 +212,4 @@ t.type('reading', 'insertReplacementText');
 assert.equal(t.els.tags.value, 'reading');
 assert.equal(t.input.value, '');
 
-console.log('PASS: highlight palette, highlighted drafts, legacy drafts, Delta formatting roundtrip, reflections, tags in drafts, discard, validation precedence, literal text, textarea fallback, and tag chips.');
+console.log('PASS: per-user draft keys, highlight palette, highlighted drafts, legacy drafts, Delta formatting roundtrip, reflections, tags in drafts, discard, validation precedence, literal text, textarea fallback, and tag chips.');

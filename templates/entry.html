@@ -128,7 +128,7 @@
 <script>
     try {
         if (sessionStorage.getItem("my-journal-save-pending") === "true") {
-            localStorage.removeItem("my-journal-new-entry-draft");
+            localStorage.removeItem({{ draft_key | tojson }});
             sessionStorage.removeItem("my-journal-save-pending");
         }
     } catch (error) {

@@ -3,6 +3,7 @@
 A .env file next to this one is loaded first when python-dotenv is installed.
 Variables already set in the environment win over the file. See .env.example.
 """
+from datetime import timedelta
 import os
 from pathlib import Path
 
@@ -23,6 +24,9 @@ DEFAULT_DATABASE = "journal.db"
 
 # Largest upload accepted (the JSON restore file).
 MAX_UPLOAD_MB = 10
+
+# How long "Keep me logged in" lasts.
+REMEMBER_DAYS = 30
 
 
 class ConfigError(RuntimeError):
@@ -55,9 +59,19 @@ def load_config(environ=None):
             "SECRET_KEY must be set to a long random value in production. "
             "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\"")
 
+    production = app_env == "production"
     return {
         "APP_ENV": app_env,
         "SECRET_KEY": secret_key or DEFAULT_SECRET_KEY,
         "DATABASE": database_path(environ),
         "MAX_CONTENT_LENGTH": MAX_UPLOAD_MB * 1024 * 1024,
+        # Login cookies: never readable by page scripts, never sent with
+        # cross-site form posts, and HTTPS-only in production.
+        "SESSION_COOKIE_HTTPONLY": True,
+        "SESSION_COOKIE_SAMESITE": "Lax",
+        "SESSION_COOKIE_SECURE": production,
+        "REMEMBER_COOKIE_HTTPONLY": True,
+        "REMEMBER_COOKIE_SAMESITE": "Lax",
+        "REMEMBER_COOKIE_SECURE": production,
+        "REMEMBER_COOKIE_DURATION": timedelta(days=REMEMBER_DAYS),
     }

@@ -13,6 +13,7 @@ from unittest import mock
 
 from database import initialize_database
 import backup
+from tests.helpers import add_user, log_in_as
 
 
 ENTRIES = [
@@ -56,17 +57,21 @@ class BackupTests(unittest.TestCase):
         folder.mkdir()
         path = str(folder / name)
         initialize_database(path)
+        # Every test database has one user (id 1), who owns the entries.
+        self.user_id = add_user(path)
         with sqlite3.connect(path) as db:
             db.executemany(
                 'INSERT INTO entries (title, content, mood, created_at, content_html, '
-                'is_favorite, went_well, went_wrong, improve_tomorrow) VALUES (?,?,?,?,?,?,?,?,?)',
-                rows)
+                'is_favorite, went_well, went_wrong, improve_tomorrow, user_id) '
+                'VALUES (?,?,?,?,?,?,?,?,?,?)',
+                [(*row, self.user_id) for row in rows])
         db.close()
         return path
 
     def use_database(self, path):
         self.app.config.update(TESTING=True, DATABASE=path)
         self.client = self.app.test_client()
+        log_in_as(self.client, 1)
 
     def rows(self, path):
         with sqlite3.connect(path) as db:
@@ -127,17 +132,19 @@ class BackupTests(unittest.TestCase):
         columns = {row[1] for row in db.execute('PRAGMA table_info(entries)')}
         db.close()
         for entry in payload['entries']:
-            # Exports only hold entries outside Trash, so deleted_at is left out.
-            self.assertEqual(set(entry), columns - {'deleted_at'} | {'tags'})
+            # Exports only hold entries outside Trash, so deleted_at is left out,
+            # and the owner's internal id means nothing outside this server.
+            self.assertEqual(set(entry), columns - {'deleted_at', 'user_id'} | {'tags'})
 
-    def test_database_export_is_an_exact_copy(self):
-        response = self.client.get('/backup/export.db')
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(f'my-journal-{date.today().isoformat()}.db',
-                      response.headers['Content-Disposition'])
-        copy = Path(self.tmp.name) / 'downloaded.db'
-        copy.write_bytes(response.data)
-        self.assertEqual(self.rows(str(copy)), self.rows(self.path))
+    def test_no_database_download_and_no_server_path(self):
+        # A copy of the database file would hold every user's journal.
+        self.assertEqual(self.client.get('/backup/export.db').status_code, 404)
+        page = self.client.get('/backup').text
+        self.assertNotIn('Download .db', page)
+        self.assertNotIn('export.db', page)
+        self.assertNotIn(str(backup.backup_folder(self.path)), page)
+        self.assertNotIn(self.tmp.name, page)
+        self.assertIn('the server also saves a backup copy automatically', page)
 
     # ---------- restore ----------
 

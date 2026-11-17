@@ -4,6 +4,7 @@ Settings come from config.py (environment variables / .env), each request
 gets one database connection from db.py, and the pages live in blueprints
 under views/:
 
+    auth      /signup  /login  /logout  (the only pages open without logging in)
     entries   /  /write  /entry/<id>  /edit/<id>  /favorite  /delete  /restore  /trash
     history   /history
     insights  /insights  /week
@@ -13,15 +14,17 @@ from datetime import date, datetime
 import os
 import threading
 
+import click
 from flask import Flask, current_app, render_template, request
 
 import db
+from accounts import assign_unowned, find_user_by_email
 from backup import run_daily_backup
 from config import load_config
 from database import initialize_database
 from trash import cleanup_trash
 from views import backup as backup_views
-from views import entries, history, insights
+from views import auth, entries, history, insights
 from views.shared import register_template_helpers
 
 
@@ -82,6 +85,19 @@ def init_db_command():
     print("Database initialized successfully!")
 
 
+@click.option("--email", required=True, help="Email of the existing account to receive the entries.")
+def assign_entries_command(email):
+    """Give every entry and tag without an owner to an existing account."""
+    initialize_database(current_app.config["DATABASE"])
+    connection = db.get_db()
+    user = find_user_by_email(connection, email)
+    if user is None:
+        raise click.ClickException(f"No account uses {email.strip()}. Sign up first, then run this again.")
+    moved_entries, moved_tags = assign_unowned(connection, user[0])
+    click.echo(f"Assigned {moved_entries} {'entry' if moved_entries == 1 else 'entries'} and "
+               f"{moved_tags} {'tag' if moved_tags == 1 else 'tags'} to {user[1]}.")
+
+
 def create_app(overrides=None):
     """Build the app. Raises config.ConfigError if the environment is unsafe."""
     app = Flask(__name__)
@@ -94,7 +110,9 @@ def create_app(overrides=None):
 
     app.before_request(ensure_database_schema)
     app.before_request(ensure_daily_backup)
+    auth.init_app(app)   # after the schema check: logging in reads the users table
 
+    app.register_blueprint(auth.bp)
     app.register_blueprint(entries.bp)
     app.register_blueprint(history.bp)
     app.register_blueprint(insights.bp)
@@ -102,6 +120,7 @@ def create_app(overrides=None):
 
     app.register_error_handler(404, page_not_found)
     app.cli.command("init-db")(init_db_command)
+    app.cli.command("assign-entries")(assign_entries_command)
     return app
 
 

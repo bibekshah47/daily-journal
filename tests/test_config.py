@@ -12,6 +12,7 @@ from flask import g
 import config
 from config import ConfigError, DEFAULT_SECRET_KEY, load_config
 from database import initialize_database
+from tests.helpers import signed_in_client
 
 
 class ConfigTests(unittest.TestCase):
@@ -108,7 +109,7 @@ class RequestConnectionTests(unittest.TestCase):
             self.assertEqual(get_db().execute('SELECT COUNT(*) FROM entries').fetchone()[0], 0)
 
     def test_every_page_loads_with_the_request_connection(self):
-        client = self.app.test_client()
+        client, _ = signed_in_client(self.app, self.path)
         client.post('/write', data={'journal': 'Hello', 'tags': 'one'})
         for url in ('/', '/write', '/history', '/entry/1', '/edit/1', '/insights',
                     '/week', '/trash', '/backup'):

@@ -11,6 +11,7 @@ from unittest import mock
 from database import connect, initialize_database
 from memories import get_memories, subtract_months
 from tags import set_entry_tags
+from tests.helpers import add_user, signed_in_client
 
 TODAY = date(2026, 11, 16)
 
@@ -20,6 +21,7 @@ class MemoryTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.path = str(Path(self.tmp.name) / 'journal.db')
         initialize_database(self.path)
+        self.user_id = add_user(self.path)
         self.db = connect(self.path)
 
     def tearDown(self):
@@ -28,15 +30,15 @@ class MemoryTests(unittest.TestCase):
 
     def add(self, day, time='09:00:00', title=None, content='Words', tags=()):
         cursor = self.db.execute(
-            'INSERT INTO entries (title, content, mood, created_at) VALUES (?, ?, ?, ?)',
-            (title, content, 'Happy', f'{day.isoformat()}T{time}'))
+            'INSERT INTO entries (title, content, mood, created_at, user_id) VALUES (?, ?, ?, ?, ?)',
+            (title, content, 'Happy', f'{day.isoformat()}T{time}', self.user_id))
         if tags:
-            set_entry_tags(self.db, cursor.lastrowid, tags)
+            set_entry_tags(self.db, cursor.lastrowid, tags, user_id=self.user_id)
         self.db.commit()
         return cursor.lastrowid
 
     def memories(self, today=TODAY, limit=10):
-        return [(m['label'], m['entry']['id']) for m in get_memories(self.db, today, limit)]
+        return [(m['label'], m['entry']['id']) for m in get_memories(self.db, today, limit, user_id=self.user_id)]
 
     # ---------- date math ----------
 
@@ -69,7 +71,7 @@ class MemoryTests(unittest.TestCase):
     def test_latest_entry_on_the_day_and_its_tags(self):
         self.add(date(2025, 11, 16), '08:00:00')
         latest = self.add(date(2025, 11, 16), '22:00:00', title='Evening', tags=['family', 'walks'])
-        [memory] = get_memories(self.db, TODAY)
+        [memory] = get_memories(self.db, TODAY, user_id=self.user_id)
         self.assertEqual(memory['entry']['id'], latest)
         self.assertEqual(memory['entry']['title'], 'Evening')
         self.assertEqual(memory['entry']['tags'], ['family', 'walks'])
@@ -132,14 +134,14 @@ class MemoryTests(unittest.TestCase):
     def test_limit_keeps_the_oldest(self):
         ids = [self.add(date(2026 - years, 11, 16)) for years in range(1, 6)]
         self.add(date(2026, 11, 9))
-        result = get_memories(self.db, TODAY)                # default limit is 3
+        result = get_memories(self.db, TODAY, user_id=self.user_id)                # default limit is 3
         self.assertEqual([m['entry']['id'] for m in result], [ids[4], ids[3], ids[2]])
         self.assertEqual([m['label'] for m in result], ['5 years ago', '4 years ago', '3 years ago'])
-        self.assertEqual(len(get_memories(self.db, TODAY, limit=1)), 1)
-        self.assertEqual(get_memories(self.db, TODAY, limit=0), [])
+        self.assertEqual(len(get_memories(self.db, TODAY, limit=1, user_id=self.user_id)), 1)
+        self.assertEqual(get_memories(self.db, TODAY, limit=0, user_id=self.user_id), [])
 
     def test_empty_database(self):
-        self.assertEqual(get_memories(self.db, TODAY), [])
+        self.assertEqual(get_memories(self.db, TODAY, user_id=self.user_id), [])
 
 
 class HomeMemoryTests(unittest.TestCase):
@@ -162,7 +164,7 @@ class HomeMemoryTests(unittest.TestCase):
         self.path = str(Path(self.tmp.name) / 'journal.db')
         initialize_database(self.path)
         self.app.config.update(TESTING=True, DATABASE=self.path)
-        self.client = self.app.test_client()
+        self.client, self.user_id = signed_in_client(self.app, self.path)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -171,9 +173,9 @@ class HomeMemoryTests(unittest.TestCase):
         db = connect(self.path)
         try:
             cursor = db.execute(
-                "INSERT INTO entries (title, content, mood, created_at) VALUES (?, 'A long walk', 'Sad', ?)",
-                (title, created_at))
-            set_entry_tags(db, cursor.lastrowid, tags)
+                "INSERT INTO entries (title, content, mood, created_at, user_id) "
+                "VALUES (?, 'A long walk', 'Sad', ?, ?)", (title, created_at, self.user_id))
+            set_entry_tags(db, cursor.lastrowid, tags, user_id=self.user_id)
             db.commit()
             return cursor.lastrowid
         finally:

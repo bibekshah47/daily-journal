@@ -6,23 +6,25 @@ from flask import (Blueprint, current_app, flash, redirect, render_template,
                    request, send_file, url_for)
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from backup import (RestoreError, backup_folder, database_bytes, entries_to_json,
-                    entries_to_markdown, latest_backup_time, parse_backup,
-                    restore_entries, restore_message)
+from backup import (RestoreError, entries_to_json, entries_to_markdown,
+                    latest_backup_time, parse_backup, restore_entries,
+                    restore_message)
 from config import MAX_UPLOAD_MB
 from db import get_db
 from tags import get_tags_for_entries
+from views.shared import user_id
 
 bp = Blueprint("backup", __name__)
 
 
 def render_backup_page(error=None, status=200):
-    database_path = current_app.config["DATABASE"]
     total, oldest, newest = get_db().execute(
-        "SELECT COUNT(*), MIN(created_at), MAX(created_at) FROM live_entries"
-    ).fetchone()
+        "SELECT COUNT(*), MIN(created_at), MAX(created_at) FROM live_entries WHERE user_id = ?",
+        (user_id(),)).fetchone()
     try:
-        last_backup = latest_backup_time(database_path)
+        # The daily backup copies the whole database on the server. Its time
+        # is shown, never its location.
+        last_backup = latest_backup_time(current_app.config["DATABASE"])
     except OSError:
         last_backup = None
     return render_template(
@@ -32,18 +34,18 @@ def render_backup_page(error=None, status=200):
         oldest_entry=oldest,
         newest_entry=newest,
         last_backup=last_backup,
-        backup_folder=backup_folder(database_path),
         max_upload_mb=MAX_UPLOAD_MB,
     ), status
 
 
 def all_entries_newest_first():
-    """Every entry not in Trash, newest first, plus {entry_id: [tag names]}."""
+    """The user's entries not in Trash, newest first, plus {entry_id: [tag names]}."""
     connection = get_db()
+    me = user_id()
     rows = connection.execute(
-        "SELECT * FROM live_entries ORDER BY created_at DESC, id DESC"
-    ).fetchall()
-    return rows, get_tags_for_entries(connection, [row["id"] for row in rows])
+        "SELECT * FROM live_entries WHERE user_id = ? ORDER BY created_at DESC, id DESC",
+        (me,)).fetchall()
+    return rows, get_tags_for_entries(connection, [row["id"] for row in rows], user_id=me)
 
 
 def download_response(data, extension, mimetype, when):
@@ -77,14 +79,6 @@ def export_json():
                              "application/json", now)
 
 
-@bp.route("/backup/export.db")
-def export_database():
-    now = datetime.now()
-    # A file-level copy through SQLite's backup API, so it opens its own connections.
-    return download_response(database_bytes(current_app.config["DATABASE"]), "db",
-                             "application/vnd.sqlite3", now)
-
-
 @bp.route("/backup/restore", methods=["POST"])
 def restore_backup():
     upload = request.files.get("backup_file")
@@ -99,7 +93,7 @@ def restore_backup():
     except RestoreError as error:
         return render_backup_page(str(error), 400)
 
-    added, skipped = restore_entries(get_db(), entries)
+    added, skipped = restore_entries(get_db(), entries, user_id=user_id())
 
     flash(restore_message(added, skipped))
     return redirect(url_for("backup.backup_page"))

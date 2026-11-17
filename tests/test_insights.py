@@ -10,25 +10,36 @@ import unittest
 
 from database import initialize_database
 from journal_insights import get_journal_stats
+from tests.helpers import signed_in_client
 
 
 class InsightsTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(':memory:')
-        self.db.execute('CREATE TABLE entries (created_at TEXT, went_well TEXT, went_wrong TEXT, improve_tomorrow TEXT, deleted_at TEXT)')
+        self.db.execute('CREATE TABLE entries (created_at TEXT, went_well TEXT, went_wrong TEXT, improve_tomorrow TEXT, deleted_at TEXT, user_id INTEGER)')
         # Stats read the same view the app uses, which hides entries in Trash.
         self.db.execute('CREATE VIEW live_entries AS SELECT * FROM entries WHERE deleted_at IS NULL')
 
     def tearDown(self):
         self.db.close()
 
-    def add(self, day, *answers):
+    def add(self, day, *answers, user_id=1):
         answers = list(answers) + [None] * (3 - len(answers))
-        self.db.execute('INSERT INTO entries (created_at, went_well, went_wrong, improve_tomorrow) '
-                        'VALUES (?,?,?,?)', (day, *answers))
+        self.db.execute('INSERT INTO entries (created_at, went_well, went_wrong, improve_tomorrow, user_id) '
+                        'VALUES (?,?,?,?,?)', (day, *answers, user_id))
 
-    def stats(self, today=date(2026, 11, 13)):
-        return get_journal_stats(self.db, today)
+    def stats(self, today=date(2026, 11, 13), user_id=1):
+        return get_journal_stats(self.db, today, user_id=user_id)
+
+    def test_only_counts_one_users_entries(self):
+        self.add('2026-11-13', 'Mine')
+        for day in ['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13']:
+            self.add(day, 'Theirs', user_id=2)
+        self.add('2026-11-13', 'Nobody owns this', user_id=None)
+        stats = self.stats()
+        self.assertEqual((stats['total_entries'], stats['current_streak'], stats['reflection_entries']), (1, 1, 1))
+        self.assertEqual(self.stats(user_id=2)['current_streak'], 4)
+        self.assertEqual(self.stats(user_id=3)['total_entries'], 0)
 
     def test_empty(self):
         stats = self.stats()
@@ -90,7 +101,7 @@ class InsightsTests(unittest.TestCase):
             previous_config = app.config['DATABASE']
             app.config.update(TESTING=True, DATABASE=path)
             try:
-                client = app.test_client()
+                client, user_id = signed_in_client(app, path)
                 page = client.get('/insights')
                 self.assertEqual(page.status_code, 200)
                 self.assertIn('Write your first entry', page.text)
@@ -110,7 +121,7 @@ class InsightsTests(unittest.TestCase):
                 self.assertNotIn('chart.js', page.lower())
                 with sqlite3.connect(path) as db:
                     db.row_factory = sqlite3.Row
-                    stats = get_journal_stats(db)
+                    stats = get_journal_stats(db, user_id=user_id)
                     self.assertEqual(stats['total_entries'], 1)
                     self.assertEqual(stats['current_streak'], 1)
                     self.assertEqual(stats['monthly_entries'], 1)

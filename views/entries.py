@@ -12,7 +12,8 @@ from tags import get_tags_for_entries, parse_tags, set_entry_tags
 from templates_data import WRITING_TEMPLATES
 from trash import TRASH_DAYS, empty_trash, purge_entry
 from views.shared import (REFLECTION_FIELDS, attach_tags, entry_summary,
-                          parse_timestamp, safe_next_url, tag_suggestions)
+                          owned_entry_or_404, parse_timestamp, safe_next_url,
+                          tag_suggestions, user_id)
 
 bp = Blueprint("entries", __name__)
 
@@ -52,35 +53,37 @@ def home():
         greeting = "Good evening"
 
     connection = get_db()
-    stats = get_journal_stats(connection, today)
+    me = user_id()
+    stats = get_journal_stats(connection, today, user_id=me)
 
     # The three most recent journal entries
     rows = connection.execute("""
         SELECT *
         FROM live_entries
+        WHERE user_id = ?
         ORDER BY created_at DESC, id DESC
         LIMIT 3
-    """).fetchall()
+    """, (me,)).fetchall()
     recent_entries = attach_tags(connection, [entry_summary(row) for row in rows])
 
     # Did the user already write today? Link to that entry if so.
     today_entry = connection.execute("""
         SELECT id, title FROM live_entries
-        WHERE date(created_at) = ?
+        WHERE user_id = ? AND date(created_at) = ?
         ORDER BY created_at DESC LIMIT 1
-    """, (today.isoformat(),)).fetchone()
+    """, (me, today.isoformat())).fetchone()
 
     # "On this day": entries from a week, a month, months and years ago
-    memories = get_memories(connection, today)
+    memories = get_memories(connection, today, user_id=me)
 
     # Moods for the last 14 days (latest entry of each day)
     start = today - timedelta(days=13)
     mood_rows = connection.execute("""
         SELECT date(created_at) AS day, mood
         FROM live_entries
-        WHERE date(created_at) >= ?
+        WHERE user_id = ? AND date(created_at) >= ?
         ORDER BY created_at
-    """, (start.isoformat(),)).fetchall()
+    """, (me, start.isoformat())).fetchall()
 
     day_moods = {}
     for row in mood_rows:
@@ -148,13 +151,13 @@ def write_journal():
         connection = get_db()
         cursor = connection.execute("""
             INSERT INTO entries
-                (title, content, mood, created_at, content_html,
+                (user_id, title, content, mood, created_at, content_html,
                  went_well, went_wrong, improve_tomorrow)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (title, content, mood, created_at, content_html,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id(), title, content, mood, created_at, content_html,
               *(reflections[field] for field in REFLECTION_FIELDS)))
         entry_id = cursor.lastrowid
-        set_entry_tags(connection, entry_id, tags)
+        set_entry_tags(connection, entry_id, tags, user_id=user_id())
         connection.commit()
 
         flash("Entry saved.")
@@ -180,28 +183,22 @@ def write_journal():
 def view_entry(entry_id):
 
     connection = get_db()
-    # "entries", not "live_entries": a trashed entry opens with a Restore notice.
-    row = connection.execute(
-        "SELECT * FROM entries WHERE id = ?", (entry_id,)
-    ).fetchone()
-
-    if row is None:
-        abort(404)
-
-    entry = dict(row)
-    entry["tags"] = get_tags_for_entries(connection, [entry_id])[entry_id]
+    me = user_id()
+    # Any of the user's entries, in Trash or not: a trashed one opens with a Restore notice.
+    entry = dict(owned_entry_or_404(entry_id))
+    entry["tags"] = get_tags_for_entries(connection, [entry_id], user_id=me)[entry_id]
 
     # Find the next older and newer entries for "previous / next" links
     older = connection.execute("""
         SELECT id, title, created_at FROM live_entries
-        WHERE created_at < ? OR (created_at = ? AND id < ?)
+        WHERE user_id = ? AND (created_at < ? OR (created_at = ? AND id < ?))
         ORDER BY created_at DESC, id DESC LIMIT 1
-    """, (entry["created_at"], entry["created_at"], entry_id)).fetchone()
+    """, (me, entry["created_at"], entry["created_at"], entry_id)).fetchone()
     newer = connection.execute("""
         SELECT id, title, created_at FROM live_entries
-        WHERE created_at > ? OR (created_at = ? AND id > ?)
+        WHERE user_id = ? AND (created_at > ? OR (created_at = ? AND id > ?))
         ORDER BY created_at ASC, id ASC LIMIT 1
-    """, (entry["created_at"], entry["created_at"], entry_id)).fetchone()
+    """, (me, entry["created_at"], entry["created_at"], entry_id)).fetchone()
 
     return render_template("entry.html", entry=entry, older=older, newer=newer)
 
@@ -211,11 +208,11 @@ def view_entry(entry_id):
 def edit_entry(entry_id):
 
     connection = get_db()
+    me = user_id()
 
-    # Entries in Trash can't be edited; their page offers Restore instead.
-    status = connection.execute(
-        "SELECT deleted_at FROM entries WHERE id = ?", (entry_id,)).fetchone()
-    if status is not None and status["deleted_at"]:
+    # Someone else's entry is a 404. Entries in Trash can't be edited; their
+    # page offers Restore instead.
+    if owned_entry_or_404(entry_id, "deleted_at")["deleted_at"]:
         return redirect(url_for("entries.view_entry", entry_id=entry_id))
 
     # Check whether the user submitted the edit form
@@ -237,13 +234,13 @@ def edit_entry(entry_id):
                 UPDATE entries
                 SET content = ?, mood = ?, title = ?, content_html = ?,
                     went_well = ?, went_wrong = ?, improve_tomorrow = ?
-                WHERE id = ? AND deleted_at IS NULL
+                WHERE id = ? AND user_id = ? AND deleted_at IS NULL
                 """,
                 (updated_content, updated_mood, updated_title, content_html,
-                 *(reflections[field] for field in REFLECTION_FIELDS), entry_id)
+                 *(reflections[field] for field in REFLECTION_FIELDS), entry_id, me)
             )
             if cursor.rowcount:
-                set_entry_tags(connection, entry_id, updated_tags)
+                set_entry_tags(connection, entry_id, updated_tags, user_id=me)
 
             connection.commit()
 
@@ -252,11 +249,11 @@ def edit_entry(entry_id):
 
     # Retrieve the journal entry being edited
     row = connection.execute(
-        "SELECT * FROM live_entries WHERE id = ?", (entry_id,)).fetchone()
+        "SELECT * FROM live_entries WHERE id = ? AND user_id = ?", (entry_id, me)).fetchone()
     if row is None:
         abort(404)
     entry = dict(row)
-    entry["tags"] = get_tags_for_entries(connection, [entry_id])[entry_id]
+    entry["tags"] = get_tags_for_entries(connection, [entry_id], user_id=me)[entry_id]
 
     # Keep every submitted field when validation fails.
     if request.method == "POST":
@@ -275,12 +272,13 @@ def edit_entry(entry_id):
 @bp.route("/favorite/<int:entry_id>", methods=["POST"])
 def toggle_favorite(entry_id):
 
+    owned_entry_or_404(entry_id, "id")
     connection = get_db()
     connection.execute("""
         UPDATE entries
         SET is_favorite = CASE WHEN is_favorite = 1 THEN 0 ELSE 1 END
-        WHERE id = ? AND deleted_at IS NULL
-    """, (entry_id,))
+        WHERE id = ? AND user_id = ? AND deleted_at IS NULL
+    """, (entry_id, user_id()))
     connection.commit()
 
     # Preserve the active search, date and favorites filters
@@ -301,11 +299,13 @@ def toggle_favorite(entry_id):
 @bp.route("/delete/<int:entry_id>", methods=["POST"])
 def delete_entry(entry_id):
 
+    owned_entry_or_404(entry_id, "id")
     connection = get_db()
     with connection:
         moved = connection.execute(
-            "UPDATE entries SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
-            (datetime.now().isoformat(), entry_id),
+            "UPDATE entries SET deleted_at = ? "
+            "WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+            (datetime.now().isoformat(), entry_id, user_id()),
         ).rowcount
 
     if moved:
@@ -316,11 +316,13 @@ def delete_entry(entry_id):
 
 @bp.route("/restore/<int:entry_id>", methods=["POST"])
 def restore_entry(entry_id):
+    owned_entry_or_404(entry_id, "id")
     connection = get_db()
     with connection:
         restored = connection.execute(
-            "UPDATE entries SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
-            (entry_id,),
+            "UPDATE entries SET deleted_at = NULL "
+            "WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL",
+            (entry_id, user_id()),
         ).rowcount
 
     if restored:
@@ -341,9 +343,9 @@ def trash():
     today = date.today()
     rows = get_db().execute("""
         SELECT * FROM entries
-        WHERE deleted_at IS NOT NULL
+        WHERE user_id = ? AND deleted_at IS NOT NULL
         ORDER BY deleted_at DESC, id DESC
-    """).fetchall()
+    """, (user_id(),)).fetchall()
 
     entries = []
     for row in rows:
@@ -357,9 +359,10 @@ def trash():
 
 @bp.route("/trash/<int:entry_id>/purge", methods=["POST"])
 def purge_trashed_entry(entry_id):
+    owned_entry_or_404(entry_id, "id")
     connection = get_db()
     with connection:
-        erased = purge_entry(connection, entry_id)
+        erased = purge_entry(connection, entry_id, user_id=user_id())
 
     if erased:
         flash("Entry deleted forever.")
@@ -370,7 +373,7 @@ def purge_trashed_entry(entry_id):
 def empty_trash_route():
     connection = get_db()
     with connection:
-        erased = empty_trash(connection)
+        erased = empty_trash(connection, user_id=user_id())
 
     if erased:
         flash("Trash emptied.")

@@ -13,6 +13,7 @@ import unittest
 from database import connect, initialize_database
 from rich_text import clean_html
 from templates_data import WRITING_TEMPLATES
+from tests.helpers import signed_in_client
 
 
 class TemplateDataTests(unittest.TestCase):
@@ -49,7 +50,7 @@ class WriteExtrasPageTests(unittest.TestCase):
         self.path = str(Path(self.tmp.name) / 'journal.db')
         initialize_database(self.path)
         self.app.config.update(TESTING=True, DATABASE=self.path)
-        self.client = self.app.test_client()
+        self.client, self.user_id = signed_in_client(self.app, self.path)
         # Skip the once-a-day backup/cleanup hook.
         self.module._daily_backups_checked.add((os.path.abspath(self.path), date.today()))
 
@@ -59,8 +60,8 @@ class WriteExtrasPageTests(unittest.TestCase):
     def add_entry(self):
         db = connect(self.path)
         try:
-            cursor = db.execute('INSERT INTO entries (content, created_at) VALUES (?, ?)',
-                                ('Existing words', '2026-11-16T09:00:00'))
+            cursor = db.execute('INSERT INTO entries (content, created_at, user_id) VALUES (?, ?, ?)',
+                                ('Existing words', '2026-11-16T09:00:00', self.user_id))
             db.commit()
             return cursor.lastrowid
         finally:

@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, request
 
 from db import get_db
 from journal_insights import REFLECTION_QUESTIONS, get_journal_stats
-from views.shared import MOODS
+from views.shared import MOODS, user_id
 from weekly import get_week_review, week_bounds, week_label
 
 bp = Blueprint("insights", __name__)
@@ -14,10 +14,11 @@ bp = Blueprint("insights", __name__)
 @bp.route("/insights")
 def insights():
     connection = get_db()
-    stats = get_journal_stats(connection)
+    stats = get_journal_stats(connection, user_id=user_id())
     mood_counts = dict(connection.execute(
-        "SELECT mood, COUNT(*) FROM live_entries WHERE mood IS NOT NULL AND mood != '' GROUP BY mood"
-    ).fetchall())
+        "SELECT mood, COUNT(*) FROM live_entries "
+        "WHERE user_id = ? AND mood IS NOT NULL AND mood != '' GROUP BY mood",
+        (user_id(),)).fetchall())
 
     mood_breakdown = [
         {**mood, "count": mood_counts.get(mood["name"], 0)} for mood in MOODS
@@ -40,7 +41,7 @@ def week():
         start = this_week
         previous_start = start - timedelta(days=7)
 
-    review = get_week_review(get_db(), start)
+    review = get_week_review(get_db(), start, user_id=user_id())
 
     # No arrow into the future (and no date overflow near year 9999).
     next_start = start + timedelta(days=7) if start < this_week else None

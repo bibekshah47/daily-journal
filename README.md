@@ -18,13 +18,48 @@ Mood names, emoji and colors are defined once in `MOODS` in `views/shared.py`.
 | `views/history.py` | History calendar, search and filters |
 | `views/insights.py` | Insights and the weekly review |
 | `views/backup.py` | Backup & export and JSON restore |
+| `views/auth.py` | Sign up, log in, log out, and the login check on every other page |
+| `accounts.py` | Email and password rules, password hashing, claiming old entries |
 | `database.py` | Creates and upgrades the schema |
-| `backup.py`, `tags.py`, `memories.py`, `weekly.py`, `journal_insights.py`, `trash.py` | Logic and SQL; each function takes a connection |
+| `backup.py`, `tags.py`, `memories.py`, `weekly.py`, `journal_insights.py`, `trash.py` | Logic and SQL; each function takes a connection and the user's id |
 
 Routes get their connection from `get_db()` and pass it to the helper modules,
 which never open their own. The only exceptions are schema setup (`database.py`)
-and the file copies made for backups and the `.db` download (`backup.py`).
+and the file copies made for daily backups (`backup.py`).
 Every query passes values as `?` parameters.
+
+## Accounts and privacy
+
+Everyone has their own journal. Every page except `/login` and `/signup` needs
+a logged-in user; logged-out visitors go to `/login?next=...` and come back
+afterwards (`next` must be a path on this site, so links can't send people to
+another site). Passwords are hashed with werkzeug (`generate_password_hash`)
+and never stored, logged or shown.
+
+Every query on entries and tags filters by the logged-in user's id, and the
+helper functions require a `user_id` argument, so a query without one fails
+loudly instead of returning someone else's data. Opening, editing,
+favoriting, deleting, restoring or erasing another user's entry returns 404,
+exactly like a missing entry. Tags belong to one user, so two people can both
+have a `work` tag. Exports and restores only ever touch your own entries.
+Unsaved Write drafts live in the browser under a key that includes the user id.
+
+"Keep me logged in" lasts 30 days. Cookies are `HttpOnly` and `SameSite=Lax`,
+and `Secure` when `APP_ENV=production`, so production must be served over HTTPS.
+
+### Upgrading a journal from before accounts
+
+The upgrade runs by itself (or with `init-db`) and keeps every entry, but
+entries written before accounts have no owner, so nobody sees them until they
+are claimed. Sign up in the app, then run:
+
+```sh
+.venv/bin/python -m flask --app app assign-entries --email you@example.com
+```
+
+It gives every entry and tag without an owner to that account and prints how
+many it moved. Entries that already have an owner are never touched, and it
+is safe to run again.
 
 Endpoints are named after their blueprint, so templates link with
 `url_for('entries.view_entry', ...)`, `url_for('history.history')`,
@@ -82,15 +117,18 @@ HTML. Sanitization runs on submission and when rendering formatted content.
 ## Backup & export
 
 The **Backup & export** link at the bottom of the sidebar opens `/backup`, which
-offers three downloads: a readable Markdown file, a JSON file with every column of
-every entry, and an exact copy of the SQLite database. A JSON export can be
-restored on the same page. Restoring only adds entries that aren't already present
-(same `created_at` and `content`); it never overwrites or deletes anything.
+offers two downloads of your own entries: a readable Markdown file and a JSON file
+with every column of every entry. There is no database download, because the
+database file holds every user's journal. A JSON export can be restored on the
+same page, into whichever account is logged in. Restoring only adds entries that
+aren't already in that account (same `created_at` and `content`); it never
+overwrites or deletes anything.
 
-On the first request each day the app also copies the database to
+On the first request each day the app also copies the whole database to
 `backups/journal-YYYY-MM-DD.db`, next to the database file, and keeps the newest 14.
-A failed backup is logged and never stops a page from loading. The `backups/`
-folder is ignored by git.
+These copies hold every user's journal, so keep that folder private. The page shows
+when the last copy was made but not where it is. A failed backup is logged and
+never stops a page from loading. The `backups/` folder is ignored by git.
 
 ## Manual checks
 

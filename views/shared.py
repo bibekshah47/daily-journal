@@ -1,7 +1,9 @@
 """Values, template filters and small helpers used by several blueprints."""
 from datetime import datetime, timedelta
+from urllib.parse import urlsplit
 
-from flask import request
+from flask import abort, request
+from flask_login import current_user
 
 from db import get_db
 from rich_text import safe_journal_html
@@ -72,7 +74,36 @@ def register_template_helpers(app):
 
     @app.context_processor
     def shared_template_values():
-        return {"moods": MOODS, "mood_lookup": MOOD_LOOKUP}
+        return {"moods": MOODS, "mood_lookup": MOOD_LOOKUP, "draft_key": draft_key()}
+
+
+# ---------- The signed-in user ----------
+
+def user_id():
+    """The signed-in user's id. Every query on journal data filters by it."""
+    return current_user.id
+
+
+def draft_key():
+    """The Write page's localStorage key: one per user, so people sharing a
+    computer never see each other's unsaved drafts."""
+    if not current_user.is_authenticated:
+        return None
+    return f"my-journal-new-entry-draft-{current_user.id}"
+
+
+def owned_entry_or_404(entry_id, columns="*"):
+    """One of the user's entries (in Trash or not), or a 404.
+
+    Someone else's entry gets the same 404 as a missing one, so ids can't be
+    probed. `columns` is always a fixed string from the calling code.
+    """
+    row = get_db().execute(
+        f"SELECT {columns} FROM entries WHERE id = ? AND user_id = ?",
+        (entry_id, user_id())).fetchone()
+    if row is None:
+        abort(404)
+    return row
 
 
 # ---------- Entries ----------
@@ -94,7 +125,8 @@ def entry_summary(row):
 
 def attach_tags(connection, entries):
     """Fill in each entry summary's "tags" list with one query."""
-    tags = get_tags_for_entries(connection, [entry["id"] for entry in entries])
+    tags = get_tags_for_entries(connection, [entry["id"] for entry in entries],
+                                user_id=user_id())
     for entry in entries:
         entry["tags"] = tags.get(entry["id"], [])
     return entries
@@ -102,17 +134,32 @@ def attach_tags(connection, entries):
 
 def tag_suggestions():
     """Existing tag names for the form's <datalist>."""
-    return [tag["name"] for tag in all_tags_with_counts(get_db())]
+    return [tag["name"] for tag in all_tags_with_counts(get_db(), user_id=user_id())]
 
 
 def trash_count(connection):
     return connection.execute(
-        "SELECT COUNT(*) FROM entries WHERE deleted_at IS NOT NULL").fetchone()[0]
+        "SELECT COUNT(*) FROM entries WHERE deleted_at IS NOT NULL AND user_id = ?",
+        (user_id(),)).fetchone()[0]
+
+
+def safe_path(target):
+    """`target` if it is a path inside this app ("/history?tag=x"), else None.
+
+    Rejects other sites in every form browsers accept: "//evil.com",
+    "https://evil.com", "/\\evil.com" (browsers read "\\" as "/") and paths
+    with spaces or control characters (browsers drop some of them).
+    """
+    if not target or not target.startswith("/") or target.startswith("//"):
+        return None
+    if "\\" in target or any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in target):
+        return None
+    parts = urlsplit(target)
+    if parts.scheme or parts.netloc:
+        return None
+    return target
 
 
 def safe_next_url(fallback):
-    """Only follow redirects that stay inside this app."""
-    target = request.form.get("next", "")
-    if target.startswith("/") and not target.startswith("//"):
-        return target
-    return fallback
+    """The form's "next" path if it stays inside this app, else `fallback`."""
+    return safe_path(request.form.get("next", "")) or fallback

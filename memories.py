@@ -41,15 +41,16 @@ def _targets(today, oldest):
     return targets
 
 
-def get_memories(connection, today, limit=3):
-    """Up to `limit` memories, oldest first: [{"label": ..., "entry": {...}}].
+def get_memories(connection, today, limit=3, *, user_id):
+    """Up to `limit` of user_id's memories, oldest first: [{"label": ..., "entry": {...}}].
 
     For each target date the latest entry on that day is used; failing that,
     the latest entry on the day before, then the day after ("About ...").
     Today's entries and repeats are never included. Each entry carries "tags".
     """
     oldest = connection.execute(
-        "SELECT MIN(date(created_at)) FROM live_entries").fetchone()[0]
+        "SELECT MIN(date(created_at)) FROM live_entries WHERE user_id = ?",
+        (user_id,)).fetchone()[0]
     if not oldest or limit <= 0:
         return []
     oldest = date.fromisoformat(oldest)
@@ -65,9 +66,9 @@ def get_memories(connection, today, limit=3):
     rows = connection.execute(f"""
         SELECT {", ".join(_COLUMNS)}, date(created_at)
         FROM live_entries
-        WHERE date(created_at) IN ({placeholders})
+        WHERE user_id = ? AND date(created_at) IN ({placeholders})
         ORDER BY created_at, id
-    """, sorted(days)).fetchall()
+    """, (user_id, *sorted(days))).fetchall()
     latest = {}
     for row in rows:
         latest[row[-1]] = dict(zip(_COLUMNS, row[:-1]))
@@ -87,7 +88,8 @@ def get_memories(connection, today, limit=3):
 
     memories.sort(key=lambda memory: (memory["entry"]["created_at"], memory["entry"]["id"]))
     memories = memories[:limit]
-    tags = get_tags_for_entries(connection, [memory["entry"]["id"] for memory in memories])
+    tags = get_tags_for_entries(connection, [memory["entry"]["id"] for memory in memories],
+                                user_id=user_id)
     for memory in memories:
         memory["entry"]["tags"] = tags[memory["entry"]["id"]]
     return memories

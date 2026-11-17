@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 import re
 import sqlite3
-import tempfile
 
 from journal_insights import REFLECTION_QUESTIONS
 from rich_text import clean_html
@@ -46,14 +45,6 @@ def copy_database(database_path, destination):
             target.close()
     finally:
         source.close()
-
-
-def database_bytes(database_path):
-    """Return an exact backup of the database as bytes, for downloading."""
-    with tempfile.TemporaryDirectory() as folder:
-        path = os.path.join(folder, "export.db")
-        copy_database(database_path, path)
-        return Path(path).read_bytes()
 
 
 # ---------- Automatic daily backups ----------
@@ -158,6 +149,9 @@ def _exported(row, tags_by_id):
     entry = dict(row, tags=tags_by_id.get(row["id"], []))
     # Exports only hold live entries, so this is always empty; leave it out.
     entry.pop("deleted_at", None)
+    # The owner's internal id means nothing outside this server; a restore
+    # always gives entries to whoever is restoring them.
+    entry.pop("user_id", None)
     return entry
 
 
@@ -229,22 +223,24 @@ def parse_backup(raw_bytes):
     return entries
 
 
-def restore_entries(connection, entries):
-    """Insert entries that aren't already present. Returns (added, skipped).
+def restore_entries(connection, entries, *, user_id):
+    """Insert entries into user_id's journal unless already there. Returns (added, skipped).
 
-    An entry is a duplicate when both created_at and content match an existing
-    entry (or an earlier entry in the same file). Nothing is updated or deleted,
+    An entry is a duplicate when both created_at and content match one of
+    user_id's existing entries (or an earlier entry in the same file). Nothing is updated or deleted,
     so tags are only applied to newly added entries.
     """
-    columns = TEXT_COLUMNS + ("is_favorite",)
+    if user_id is None:
+        raise ValueError("Restored entries need an owner.")
+    columns = TEXT_COLUMNS + ("is_favorite", "user_id")
     placeholders = ", ".join("?" for _ in columns)
     added = skipped = 0
     with connection:
         connection.execute("BEGIN IMMEDIATE")
         # Read "entries", not "live_entries": an entry in Trash still counts
         # as existing, so restoring a backup never duplicates it.
-        seen = {(row[0], row[1]) for row in
-                connection.execute("SELECT created_at, content FROM entries")}
+        seen = {(row[0], row[1]) for row in connection.execute(
+            "SELECT created_at, content FROM entries WHERE user_id = ?", (user_id,))}
         # Oldest first, so restored entries get ids in the order they were written.
         for entry in sorted(entries, key=lambda item: item["created_at"]):
             key = (entry["created_at"], entry["content"])
@@ -253,10 +249,10 @@ def restore_entries(connection, entries):
                 continue
             cursor = connection.execute(
                 f"INSERT INTO entries ({', '.join(columns)}) VALUES ({placeholders})",
-                tuple(entry[column] for column in columns),
+                (*(entry[column] for column in columns[:-1]), user_id),
             )
             if entry.get("tags"):
-                set_entry_tags(connection, cursor.lastrowid, entry["tags"])
+                set_entry_tags(connection, cursor.lastrowid, entry["tags"], user_id=user_id)
             seen.add(key)
             added += 1
     return added, skipped

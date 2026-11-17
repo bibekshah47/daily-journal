@@ -40,6 +40,7 @@ function setup({quill = true, initial = '', stored = {}, focusStored, storageFai
      'template-replace', 'template-dialog-name', 'focus-toggle', 'focus-toggle-label'].forEach(element);
     element('journal').value = initial;
     element('journal').form = element('write-form');
+    element('write-form').dataset = {draftKey: 'my-journal-new-entry-draft-7'};
     element('writing-templates').textContent = JSON.stringify(TEMPLATES);
     const buttons = TEMPLATES.map(t => Object.assign(element('button-' + t.key), {dataset: {template: t.key}}));
     element('template-picker').querySelectorAll = () => buttons;
@@ -146,7 +147,7 @@ assert.equal(x.editor.focused, true);
 assert.equal(x.elements['template-picker'].hidden, true);                // hidden once there's text
 assert.equal(x.elements['template-dialog'].open, false);                 // no question for an empty editor
 x.runTimers();                                                           // the normal draft autosave
-const saved = JSON.parse(x.storage.get('my-journal-new-entry-draft'));
+const saved = JSON.parse(x.storage.get('my-journal-new-entry-draft-7'));
 assert.equal(saved.content, "Three things I'm grateful for\n\n\n\nWhy they mattered\n\n");
 assert.equal(saved.version, 2);
 // Emptying the editor brings the line back.
@@ -193,7 +194,7 @@ assert.equal(x.active, x.elements.journal);
 assert.equal(x.elements['word-count'].textContent, '11 words');           // the textarea's input handler ran
 assert.equal(x.elements['template-picker'].hidden, true);
 x.runTimers();
-assert.equal(JSON.parse(x.storage.get('my-journal-new-entry-draft')).content, plain);
+assert.equal(JSON.parse(x.storage.get('my-journal-new-entry-draft-7')).content, plain);
 x = setup({quill: false});
 x.click('brain-dump');
 assert.equal(x.elements.journal.value, 'Everything on my mind\n- \n\nWhat I can let go of\n');

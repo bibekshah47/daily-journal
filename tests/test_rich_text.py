@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 from database import initialize_database
+from tests.helpers import TEST_EMAIL, add_user, log_in_as, signed_in_client
 from rich_text import clean_html, prepare_content
 
 
@@ -37,7 +38,7 @@ class RichTextTests(unittest.TestCase):
         if Path(self.path).exists():
             Path(self.path).unlink()
         initialize_database(self.path)
-        self.client = self.module.app.test_client()
+        self.client, self.user_id = signed_in_client(self.module.app, self.path)
 
     def row(self, entry_id):
         with sqlite3.connect(self.path) as db:
@@ -75,10 +76,20 @@ class RichTextTests(unittest.TestCase):
         previous = app.config['DATABASE']
         app.config['DATABASE'] = legacy
         try:
-            # No manual initializer: the first request must migrate before INSERT.
-            response = self.client.post('/write', data={
+            # No manual initializer: the first request must migrate (adding the
+            # users table) before anything reads or writes.
+            client = app.test_client()
+            self.assertEqual(client.get('/login').status_code, 200)
+            log_in_as(client, add_user(legacy))
+            response = client.post('/write', data={
                 'editor_format': 'html', 'journal_html': '<p><strong>New</strong></p>'})
             self.assertEqual(response.status_code, 302)
+            # Entry 7 is from before accounts: nobody's until it is claimed.
+            self.assertEqual(client.get('/entry/7').status_code, 404)
+            result = app.test_cli_runner().invoke(args=['assign-entries', '--email', TEST_EMAIL])
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn('Assigned 1 entry and 0 tags', result.output)
+            self.client = client
             self.assertEqual(self.client.get('/entry/7').status_code, 200)
             self.assertEqual(self.client.get('/edit/7').status_code, 200)
             self.assertEqual(self.client.get('/history?favorites=1').status_code, 200)
@@ -88,6 +99,7 @@ class RichTextTests(unittest.TestCase):
                 preserved = db.execute("""SELECT id,content,created_at,mood,title,is_favorite,
                     went_well,went_wrong,improve_tomorrow,custom_column
                     FROM entries WHERE id=7""").fetchone()
+                self.assertEqual(db.execute('SELECT user_id FROM entries WHERE id=7').fetchone()[0], 1)
                 self.assertEqual(preserved, original)
                 self.assertIsNone(db.execute('SELECT content_html FROM entries WHERE id=7').fetchone()[0])
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM entries').fetchone()[0], 2)

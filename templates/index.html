@@ -7,6 +7,10 @@
 
 {% block content %}
 <header class="page-header">
+    {# Phones have no sidebar, so Log out lives here (hidden on wider screens). #}
+    <form method="POST" action="{{ url_for('auth.logout') }}" class="mobile-logout">
+        <button type="submit" class="text-button">Log out</button>
+    </form>
     <p class="page-kicker">{{ today | friendly_date(true) }}</p>
     <h1>{{ greeting }}, welcome back.</h1>
 </header>

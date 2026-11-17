@@ -10,10 +10,12 @@ import sqlite3
 import tempfile
 import unittest
 
+from accounts import assign_unowned
 from database import connect, initialize_database
 from tags import (all_tags_with_counts, get_tags_for_entries, normalize_tag,
                   parse_tags, set_entry_tags)
 import backup
+from tests.helpers import add_user, signed_in_client
 
 
 class TagRuleTests(unittest.TestCase):
@@ -80,7 +82,7 @@ class TagAppTests(unittest.TestCase):
 
     def use_database(self, path):
         self.app.config.update(TESTING=True, DATABASE=path)
-        self.client = self.app.test_client()
+        self.client, self.user_id = signed_in_client(self.app, path)
 
     def create(self, journal='Plain body', **fields):
         response = self.client.post('/write', data={'journal': journal, **fields})
@@ -90,7 +92,7 @@ class TagAppTests(unittest.TestCase):
     def tags_of(self, entry_id, path=None):
         db = connect(path or self.path)
         try:
-            return get_tags_for_entries(db, [entry_id])[entry_id]
+            return get_tags_for_entries(db, [entry_id], user_id=self.user_id)[entry_id]
         finally:
             db.close()
 
@@ -128,9 +130,17 @@ class TagAppTests(unittest.TestCase):
             self.assertEqual(db.execute('PRAGMA foreign_keys').fetchone()[0], 1)
             self.assertEqual(db.execute('SELECT content FROM entries WHERE id = 4').fetchone()[0],
                              'Old words')
-            set_entry_tags(db, 4, ['legacy'])
+            # Entries from before accounts have no owner until they are claimed.
+            self.assertIsNone(db.execute('SELECT user_id FROM entries WHERE id = 4').fetchone()[0])
+        finally:
+            db.close()
+        owner = add_user(legacy)
+        db = connect(legacy)
+        try:
+            self.assertEqual(assign_unowned(db, owner), (1, 0))
+            set_entry_tags(db, 4, ['legacy'], user_id=owner)
             db.commit()
-            self.assertEqual(all_tags_with_counts(db), [{'name': 'legacy', 'count': 1}])
+            self.assertEqual(all_tags_with_counts(db, user_id=owner), [{'name': 'legacy', 'count': 1}])
         finally:
             db.close()
 
