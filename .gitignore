@@ -12,9 +12,10 @@ __pycache__/
 *.sqlite
 *.sqlite3
 
-# Environment variables and secrets
+# Environment variables and secrets (the example file is the only one tracked)
 .env
 .env.*
+!.env.example
 
 # macOS system files
 .DS_Store

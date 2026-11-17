@@ -8,7 +8,7 @@
 <header class="page-header">
     <h1>Insights</h1>
     <p class="page-subtitle">How often you write, how you've been feeling, and which questions you come back to.</p>
-    <a href="{{ url_for('week') }}" class="text-link week-review-link">
+    <a href="{{ url_for('insights.week') }}" class="text-link week-review-link">
         <i data-lucide="calendar-range" aria-hidden="true"></i> Review this week
     </a>
 </header>
@@ -18,7 +18,7 @@
     <i data-lucide="notebook-pen" aria-hidden="true"></i>
     <h2>Nothing to show yet</h2>
     <p>Insights fill in as you write. One entry is enough to start.</p>
-    <a href="{{ url_for('write_journal') }}" class="button button-primary">Write your first entry</a>
+    <a href="{{ url_for('entries.write_journal') }}" class="button button-primary">Write your first entry</a>
 </div>
 {% endif %}
 
@@ -78,7 +78,7 @@
         {% else %}
             <p class="insights-question-empty">No reflections yet</p>
             <p class="stat-note">Open “Daily reflection” under your entry next time you write.</p>
-            {% if total_entries %}<a class="text-link" href="{{ url_for('write_journal') }}">Write and reflect</a>{% endif %}
+            {% if total_entries %}<a class="text-link" href="{{ url_for('entries.write_journal') }}">Write and reflect</a>{% endif %}
         {% endif %}
     </section>
 </div>

@@ -14,7 +14,7 @@
 
 {% block content %}
 {{ ui.focus_mode_early() }}
-<form method="POST" action="{{ url_for('write_journal') }}" class="compose" id="write-form">
+<form method="POST" action="{{ url_for('entries.write_journal') }}" class="compose" id="write-form">
 
     <header class="compose-header">
         <p class="compose-date" id="compose-date"></p>

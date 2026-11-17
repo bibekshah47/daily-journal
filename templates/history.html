@@ -14,7 +14,7 @@
         <p class="page-subtitle">{{ total_entries }} {{ 'entry' if total_entries == 1 else 'entries' }} so far.</p>
     </div>
     {% if trashed_entries %}
-    <a href="{{ url_for('trash') }}" class="text-link trash-link">
+    <a href="{{ url_for('entries.trash') }}" class="text-link trash-link">
         <i data-lucide="trash-2" aria-hidden="true"></i>
         Trash ({{ trashed_entries }})
     </a>
@@ -26,12 +26,12 @@
     <!-- CALENDAR (moves above the list on small screens) -->
     <section class="calendar-panel" aria-labelledby="calendar-heading">
         <div class="calendar-nav">
-            <a href="{{ url_for('history', month=previous_month, favorites='1' if favorites_only else None, tag=tag_arg) }}"
+            <a href="{{ url_for('history.history', month=previous_month, favorites='1' if favorites_only else None, tag=tag_arg) }}"
                class="icon-button" aria-label="Previous month">
                 <i data-lucide="chevron-left" aria-hidden="true"></i>
             </a>
             <h2 id="calendar-heading">{{ displayed_month.strftime("%B %Y") }}</h2>
-            <a href="{{ url_for('history', month=next_month, favorites='1' if favorites_only else None, tag=tag_arg) }}"
+            <a href="{{ url_for('history.history', month=next_month, favorites='1' if favorites_only else None, tag=tag_arg) }}"
                class="icon-button" aria-label="Next month">
                 <i data-lucide="chevron-right" aria-hidden="true"></i>
             </a>
@@ -48,7 +48,7 @@
             {% set has_entry = iso in calendar_entry_dates %}
             {% set mood = mood_lookup.get(calendar_moods.get(iso, '')) %}
             {% set is_selected = filter_date == iso %}
-            <a href="{{ url_for('history', filter_date=None if is_selected else iso, month=day.strftime('%Y-%m'), favorites='1' if favorites_only else None, tag=tag_arg) }}"
+            <a href="{{ url_for('history.history', filter_date=None if is_selected else iso, month=day.strftime('%Y-%m'), favorites='1' if favorites_only else None, tag=tag_arg) }}"
                class="calendar-day
                       {% if day.month != current_month %}other-month{% endif %}
                       {% if has_entry %}has-entry{% endif %}
@@ -73,7 +73,7 @@
     <!-- ENTRIES -->
     <section class="history-results" id="journal-results" aria-label="Entries">
 
-        <form action="{{ url_for('history') }}" method="GET" class="search-bar" role="search">
+        <form action="{{ url_for('history.history') }}" method="GET" class="search-bar" role="search">
             {% if favorites_only %}<input type="hidden" name="favorites" value="1">{% endif %}
             {% if filter_date %}<input type="hidden" name="filter_date" value="{{ filter_date }}">{% endif %}
             {% if active_tag %}<input type="hidden" name="tag" value="{{ active_tag }}">{% endif %}
@@ -88,32 +88,32 @@
             <div class="segmented" role="group" aria-label="Show">
                 <a class="segment {% if not favorites_only %}selected{% endif %}"
                    {% if not favorites_only %}aria-current="true"{% endif %}
-                   href="{{ url_for('history', search=search_query or None, filter_date=filter_date or None, month=displayed_month.strftime('%Y-%m'), tag=tag_arg) }}">
+                   href="{{ url_for('history.history', search=search_query or None, filter_date=filter_date or None, month=displayed_month.strftime('%Y-%m'), tag=tag_arg) }}">
                     All
                 </a>
                 <a class="segment {% if favorites_only %}selected{% endif %}"
                    {% if favorites_only %}aria-current="true"{% endif %}
-                   href="{{ url_for('history', search=search_query or None, filter_date=filter_date or None, month=displayed_month.strftime('%Y-%m'), favorites='1', tag=tag_arg) }}">
+                   href="{{ url_for('history.history', search=search_query or None, filter_date=filter_date or None, month=displayed_month.strftime('%Y-%m'), favorites='1', tag=tag_arg) }}">
                     <i data-lucide="star" aria-hidden="true"></i> Favorites
                 </a>
             </div>
 
             {% if filter_date %}
-            <a class="filter-pill" href="{{ url_for('history', search=search_query or None, favorites='1' if favorites_only else None, month=displayed_month.strftime('%Y-%m'), tag=tag_arg) }}"
+            <a class="filter-pill" href="{{ url_for('history.history', search=search_query or None, favorites='1' if favorites_only else None, month=displayed_month.strftime('%Y-%m'), tag=tag_arg) }}"
                aria-label="Remove date filter">
                 {{ filter_date | friendly_date }}
                 <i data-lucide="x" aria-hidden="true"></i>
             </a>
             {% endif %}
             {% if active_tag %}
-            <a class="filter-pill" href="{{ url_for('history', search=search_query or None, filter_date=filter_date or None, favorites='1' if favorites_only else None, month=displayed_month.strftime('%Y-%m')) }}"
+            <a class="filter-pill" href="{{ url_for('history.history', search=search_query or None, filter_date=filter_date or None, favorites='1' if favorites_only else None, month=displayed_month.strftime('%Y-%m')) }}"
                aria-label="Remove tag filter #{{ active_tag }}">
                 #{{ active_tag }}
                 <i data-lucide="x" aria-hidden="true"></i>
             </a>
             {% endif %}
             {% if search_query %}
-            <a class="filter-pill" href="{{ url_for('history', filter_date=filter_date or None, favorites='1' if favorites_only else None, month=displayed_month.strftime('%Y-%m'), tag=tag_arg) }}"
+            <a class="filter-pill" href="{{ url_for('history.history', filter_date=filter_date or None, favorites='1' if favorites_only else None, month=displayed_month.strftime('%Y-%m'), tag=tag_arg) }}"
                aria-label="Clear search">
                 “{{ search_query }}”
                 <i data-lucide="x" aria-hidden="true"></i>
@@ -128,7 +128,7 @@
         <div class="entry-list">
             {% for entry in group.entries %}
             <article class="entry-row has-actions {% if entry.mood in mood_lookup %}mood-{{ mood_lookup[entry.mood].key }}{% endif %}" id="entry-{{ entry.id }}">
-                <a href="{{ url_for('view_entry', entry_id=entry.id) }}" class="entry-row-link">
+                <a href="{{ url_for('entries.view_entry', entry_id=entry.id) }}" class="entry-row-link">
                     <div class="entry-row-meta">
                         <span>{{ entry.date }}, {{ entry.time }}</span>
                         {{ ui.mood_badge(entry.mood) }}
@@ -137,7 +137,7 @@
                     <p class="entry-row-preview">{{ entry.content | truncate(180) }}</p>
                 </a>
                 {{ ui.tag_pills(entry.tags, linked=true, class="entry-row-tags") }}
-                <form action="{{ url_for('toggle_favorite', entry_id=entry.id) }}" method="POST" class="favorite-form">
+                <form action="{{ url_for('entries.toggle_favorite', entry_id=entry.id) }}" method="POST" class="favorite-form">
                     <input type="hidden" name="search" value="{{ search_query }}">
                     <input type="hidden" name="filter_date" value="{{ filter_date }}">
                     <input type="hidden" name="month" value="{{ displayed_month.strftime('%Y-%m') }}">
@@ -162,11 +162,11 @@
             {% elif search_query or filter_date or favorites_only or active_tag %}
                 <h2>Nothing matches</h2>
                 <p>Try different words, or clear the filters above.</p>
-                <a href="{{ url_for('history') }}" class="button button-secondary">Clear filters</a>
+                <a href="{{ url_for('history.history') }}" class="button button-secondary">Clear filters</a>
             {% else %}
                 <h2>No entries yet</h2>
                 <p>Everything you write will be listed here by month.</p>
-                <a href="{{ url_for('write_journal') }}" class="button button-primary">Write your first entry</a>
+                <a href="{{ url_for('entries.write_journal') }}" class="button button-primary">Write your first entry</a>
             {% endif %}
         </div>
         {% endfor %}

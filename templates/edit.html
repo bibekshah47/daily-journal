@@ -14,12 +14,12 @@
 
 {% block content %}
 {{ ui.focus_mode_early() }}
-<a href="{{ url_for('view_entry', entry_id=entry['id']) }}" class="back-link">
+<a href="{{ url_for('entries.view_entry', entry_id=entry['id']) }}" class="back-link">
     <i data-lucide="arrow-left" aria-hidden="true"></i>
     Back to entry
 </a>
 
-<form method="POST" action="{{ url_for('edit_entry', entry_id=entry['id']) }}"
+<form method="POST" action="{{ url_for('entries.edit_entry', entry_id=entry['id']) }}"
       class="compose" id="edit-form">
 
     <header class="compose-header">
@@ -52,7 +52,7 @@
         </div>
         <div class="compose-actions">
             {{ ui.focus_toggle() }}
-            <a href="{{ url_for('view_entry', entry_id=entry['id']) }}" class="button button-quiet">Cancel</a>
+            <a href="{{ url_for('entries.view_entry', entry_id=entry['id']) }}" class="button button-quiet">Cancel</a>
             <button type="submit" class="button button-primary" title="Save changes (Ctrl+S)">
                 <i data-lucide="check" aria-hidden="true"></i>
                 Save changes

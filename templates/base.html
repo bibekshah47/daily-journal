@@ -12,10 +12,10 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
     {% set nav_items = [
-        ('home', 'Home', 'house'),
-        ('write_journal', 'Write', 'square-pen'),
-        ('history', 'History', 'calendar-days'),
-        ('insights', 'Insights', 'chart-no-axes-column'),
+        ('home', 'entries.home', 'Home', 'house'),
+        ('write_journal', 'entries.write_journal', 'Write', 'square-pen'),
+        ('history', 'history.history', 'History', 'calendar-days'),
+        ('insights', 'insights.insights', 'Insights', 'chart-no-axes-column'),
     ] %}
     {% set active = active_page|default('') %}
 
@@ -23,21 +23,21 @@
 
     <!-- Sidebar on wide screens, tab bar on phones (same links) -->
     <aside class="sidebar">
-        <a class="brand" href="{{ url_for('home') }}">
+        <a class="brand" href="{{ url_for('entries.home') }}">
             <i data-lucide="book-open" aria-hidden="true"></i>
             <span>My Journal</span>
         </a>
         <nav class="nav" aria-label="Main">
-            {% for endpoint, label, icon in nav_items %}
+            {% for key, endpoint, label, icon in nav_items %}
             <a href="{{ url_for(endpoint) }}"
-               class="nav-link {% if active == endpoint %}active{% endif %} {% if endpoint == 'write_journal' %}nav-write{% endif %}"
-               {% if active == endpoint %}aria-current="page"{% endif %}>
+               class="nav-link {% if active == key %}active{% endif %} {% if key == 'write_journal' %}nav-write{% endif %}"
+               {% if active == key %}aria-current="page"{% endif %}>
                 <i data-lucide="{{ icon }}" aria-hidden="true"></i>
                 <span>{{ label }}</span>
             </a>
             {% endfor %}
         </nav>
-        <a class="sidebar-note {% if active == 'backup' %}active{% endif %}" href="{{ url_for('backup_page') }}"
+        <a class="sidebar-note {% if active == 'backup' %}active{% endif %}" href="{{ url_for('backup.backup_page') }}"
            {% if active == 'backup' %}aria-current="page"{% endif %}>
             <i data-lucide="database-backup" aria-hidden="true"></i>
             <span>Backup &amp; export</span>
@@ -59,7 +59,7 @@
             <i data-lucide="check" aria-hidden="true"></i>
             <span>{{ message }}</span>
             {% if undo_id.isdigit() %}
-            <form action="{{ url_for('restore_entry', entry_id=undo_id|int) }}" method="POST" class="toast-action">
+            <form action="{{ url_for('entries.restore_entry', entry_id=undo_id|int) }}" method="POST" class="toast-action">
                 <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
                 <button type="submit" class="toast-button">Undo</button>
             </form>

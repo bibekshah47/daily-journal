@@ -1,6 +1,5 @@
 """Create and upgrade the journal schema without replacing existing entries."""
 import sqlite3
-import os
 
 
 def connect(database_path):
@@ -77,5 +76,6 @@ def initialize_database(database_path="journal.db"):
 
 
 if __name__ == "__main__":
-    initialize_database(os.environ.get("JOURNAL_DATABASE", "journal.db"))
+    from config import database_path
+    initialize_database(database_path())
     print("Database initialized successfully!")

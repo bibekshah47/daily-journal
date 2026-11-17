@@ -6,7 +6,7 @@
 {% block main_class %}trash-page{% endblock %}
 
 {% block content %}
-<a href="{{ url_for('history') }}" class="back-link">
+<a href="{{ url_for('history.history') }}" class="back-link">
     <i data-lucide="arrow-left" aria-hidden="true"></i>
     History
 </a>
@@ -28,7 +28,7 @@
 <div class="entry-list">
     {% for entry in entries %}
     <article class="entry-row {% if entry.mood in mood_lookup %}mood-{{ mood_lookup[entry.mood].key }}{% endif %}" id="entry-{{ entry.id }}">
-        <a href="{{ url_for('view_entry', entry_id=entry.id) }}" class="entry-row-link">
+        <a href="{{ url_for('entries.view_entry', entry_id=entry.id) }}" class="entry-row-link">
             <div class="entry-row-meta">
                 <span>Deleted {{ entry.deleted_at | short_date }} ·
                     {% if entry.erase_in_days == 0 %}erased today{% else %}erased in {{ entry.erase_in_days }} {{ 'day' if entry.erase_in_days == 1 else 'days' }}{% endif %}</span>
@@ -38,15 +38,15 @@
             <p class="entry-row-preview">{{ entry.content | truncate(160) }}</p>
         </a>
         <div class="entry-row-actions">
-            <form action="{{ url_for('restore_entry', entry_id=entry.id) }}" method="POST">
-                <input type="hidden" name="next" value="{{ url_for('trash') }}">
+            <form action="{{ url_for('entries.restore_entry', entry_id=entry.id) }}" method="POST">
+                <input type="hidden" name="next" value="{{ url_for('entries.trash') }}">
                 <button type="submit" class="button button-secondary">
                     <i data-lucide="undo-2" aria-hidden="true"></i>
                     Restore
                 </button>
             </form>
             <button type="button" class="button button-quiet button-danger-quiet purge-open"
-                    data-action="{{ url_for('purge_trashed_entry', entry_id=entry.id) }}"
+                    data-action="{{ url_for('entries.purge_trashed_entry', entry_id=entry.id) }}"
                     data-title="{{ entry.title or entry.date }}">
                 Delete forever
             </button>
@@ -69,7 +69,7 @@
 
 <!-- Empty the whole trash -->
 <dialog class="dialog" id="empty-dialog" aria-labelledby="empty-title">
-    <form action="{{ url_for('empty_trash_route') }}" method="POST">
+    <form action="{{ url_for('entries.empty_trash_route') }}" method="POST">
         <h2 id="empty-title">Empty trash?</h2>
         <p>{{ entries|length }} {{ 'entry' if entries|length == 1 else 'entries' }} will be erased for good. This can't be undone.</p>
         <div class="dialog-actions">
@@ -83,7 +83,7 @@
     <i data-lucide="trash-2" aria-hidden="true"></i>
     <h2>Trash is empty</h2>
     <p>Deleted entries stay here for {{ trash_days }} days.</p>
-    <a href="{{ url_for('history') }}" class="button button-secondary">Back to History</a>
+    <a href="{{ url_for('history.history') }}" class="button button-secondary">Back to History</a>
 </div>
 {% endif %}
 {% endblock %}

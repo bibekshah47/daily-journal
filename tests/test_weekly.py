@@ -175,10 +175,12 @@ class WeekPageTests(unittest.TestCase):
         initialize_database(self.path)
         self.app.config.update(TESTING=True, DATABASE=self.path)
         self.client = self.app.test_client()
-        # Pin "today", and skip the once-a-day backup/cleanup hook.
-        patcher = mock.patch.object(self.module, 'date', _FixedDate)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        # Pin "today" (in the app's daily hook and the /week route), and skip
+        # the once-a-day backup/cleanup hook.
+        for module in (self.module, importlib.import_module('views.insights')):
+            patcher = mock.patch.object(module, 'date', _FixedDate)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.module._daily_backups_checked.add((os.path.abspath(self.path), _FixedDate.today()))
 
     def tearDown(self):

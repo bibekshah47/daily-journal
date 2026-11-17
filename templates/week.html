@@ -8,12 +8,12 @@
 {% block content %}
 <header class="page-header week-header">
     <div class="week-nav">
-        <a href="{{ url_for('week', start=previous_start) }}" class="icon-button" aria-label="Previous week">
+        <a href="{{ url_for('insights.week', start=previous_start) }}" class="icon-button" aria-label="Previous week">
             <i data-lucide="chevron-left" aria-hidden="true"></i>
         </a>
         <h1>Week of {{ week_label }}</h1>
         {% if next_start %}
-        <a href="{{ url_for('week', start=next_start) }}" class="icon-button" aria-label="Next week">
+        <a href="{{ url_for('insights.week', start=next_start) }}" class="icon-button" aria-label="Next week">
             <i data-lucide="chevron-right" aria-hidden="true"></i>
         </a>
         {% else %}
@@ -23,7 +23,7 @@
         {% endif %}
     </div>
     {% if not is_this_week %}
-    <a href="{{ url_for('week') }}" class="text-link">This week</a>
+    <a href="{{ url_for('insights.week') }}" class="text-link">This week</a>
     {% endif %}
 </header>
 
@@ -32,7 +32,7 @@
     <i data-lucide="calendar-x-2" aria-hidden="true"></i>
     <h2>Nothing written this week</h2>
     <p>Entries you write this week show up here with their moods and reflections.</p>
-    <a href="{{ url_for('write_journal') }}" class="button button-primary">
+    <a href="{{ url_for('entries.write_journal') }}" class="button button-primary">
         <i data-lucide="square-pen" aria-hidden="true"></i> Write an entry
     </a>
 </section>
@@ -103,7 +103,7 @@
     <ul class="tag-list" aria-label="Tags used this week">
         {% for tag in review.tags %}
         <li>
-            <a class="tag-pill" href="{{ url_for('history', tag=tag.name) }}"><span aria-hidden="true">#</span>{{ tag.name }}<span class="tag-count">· {{ tag.count }}<span class="visually-hidden"> {{ 'entry' if tag.count == 1 else 'entries' }}</span></span></a>
+            <a class="tag-pill" href="{{ url_for('history.history', tag=tag.name) }}"><span aria-hidden="true">#</span>{{ tag.name }}<span class="tag-count">· {{ tag.count }}<span class="visually-hidden"> {{ 'entry' if tag.count == 1 else 'entries' }}</span></span></a>
         </li>
         {% endfor %}
     </ul>
@@ -116,7 +116,7 @@
     </div>
     <div class="entry-list">
         {% for entry in review.entries %}
-        <a href="{{ url_for('view_entry', entry_id=entry.id) }}"
+        <a href="{{ url_for('entries.view_entry', entry_id=entry.id) }}"
            class="entry-row {% if entry.mood in mood_lookup %}mood-{{ mood_lookup[entry.mood].key }}{% endif %}">
             <div class="entry-row-meta">
                 <span>{{ entry.created_at | friendly_date(true) }}</span>

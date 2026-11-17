@@ -5,26 +5,75 @@ Quill 2.0.3; titles, moods, and optional Daily Reflection answers remain plain t
 Quill, Lucide icons and the Literata font are vendored under `static/vendor/`, so
 the app works fully offline. All pages extend `templates/base.html`; shared
 pieces (mood picker, reflection fields, editor) live in `templates/_macros.html`.
-Mood names, emoji and colors are defined once in `MOODS` in `app.py`.
+Mood names, emoji and colors are defined once in `MOODS` in `views/shared.py`.
 
-Set `SECRET_KEY` in your environment to keep confirmation messages
-("Entry saved.") working across server restarts.
+## Project layout
 
-## Setup or upgrade
+| File | What it does |
+| --- | --- |
+| `app.py` | Creates the app (`create_app()`), registers the blueprints, runs the schema check and the daily backup before requests |
+| `config.py` | Reads settings from environment variables and `.env` |
+| `db.py` | `get_db()`: one SQLite connection per request, closed automatically |
+| `views/entries.py` | Home, Write, Edit, an entry, favorites, delete/restore, Trash |
+| `views/history.py` | History calendar, search and filters |
+| `views/insights.py` | Insights and the weekly review |
+| `views/backup.py` | Backup & export and JSON restore |
+| `database.py` | Creates and upgrades the schema |
+| `backup.py`, `tags.py`, `memories.py`, `weekly.py`, `journal_insights.py`, `trash.py` | Logic and SQL; each function takes a connection |
 
-Stop any running development server, then run these commands from this directory:
+Routes get their connection from `get_db()` and pass it to the helper modules,
+which never open their own. The only exceptions are schema setup (`database.py`)
+and the file copies made for backups and the `.db` download (`backup.py`).
+Every query passes values as `?` parameters.
+
+Endpoints are named after their blueprint, so templates link with
+`url_for('entries.view_entry', ...)`, `url_for('history.history')`,
+`url_for('insights.week')` and `url_for('backup.backup_page')`.
+
+## Setup
+
+Run these commands from this directory:
 
 ```sh
+python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
+cp .env.example .env
 .venv/bin/python -m flask --app app init-db
+```
+
+`.env` holds your local settings and is ignored by git. Every variable is optional
+for local use:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `APP_ENV` | `development` | `development` or `production` |
+| `SECRET_KEY` | a fixed development key | Signs the session cookie ("Entry saved." messages, and logins later) |
+| `DATABASE` | `journal.db` | Path to the SQLite file. The older `JOURNAL_DATABASE` name still works |
+
+Variables set in your shell take priority over `.env`. In production
+(`APP_ENV=production`) the app refuses to start unless `SECRET_KEY` is set to a
+real secret. Generate one with:
+
+```sh
+.venv/bin/python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+The `init-db` command adds missing columns without replacing existing rows. The same
+upgrade also runs before each request, so routes never use an outdated schema.
+Importing the app does not upgrade the database.
+
+## Running the app
+
+Stop any running development server first, then:
+
+```sh
 .venv/bin/python app.py
 ```
 
-The explicit `init-db` command adds missing columns without replacing existing rows.
-The same migration also runs before each request, so routes never use an outdated
-schema. Application imports alone do not migrate the database. The default
-SQLite file is `journal.db`; set `JOURNAL_DATABASE` to use another file. The server
-runs at http://127.0.0.1:5001.
+The server runs at http://127.0.0.1:5001, with Flask's debugger on in development
+and off in production. `.venv/bin/python -m flask --app app run --port 5001` works
+too. Flask's built-in server is for local use only. To deploy, set `APP_ENV=production`
+and `SECRET_KEY`, then serve `app:app` with a WSGI server such as gunicorn.
 
 `content` stays plain text for previews and search. `content_html` holds sanitized
 formatting and is NULL on legacy entries. Legacy content is never interpreted as
@@ -61,12 +110,12 @@ folder is ignored by git.
 Autosave applies to the new-entry page, as before. The edit page does not autosave.
 Drafts remain local to the browser, and old plain-text drafts still restore.
 
-## Automated checks
+## Running the tests
 
 ```sh
 .venv/bin/python -m unittest discover -s tests -v
-node tests/test_editor.js
-node --check static/journal-editor.js
+for test in tests/*.js; do node "$test"; done
+node --check static/journal-editor.js static/write-extras.js
 ```
 
 Python tests create temporary databases and verify the real database checksum is

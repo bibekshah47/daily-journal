@@ -107,7 +107,7 @@
     {% for name in tags %}
     <li>
         {% if linked %}
-        <a class="tag-pill" href="{{ url_for('history', tag=name) }}"><span aria-hidden="true">#</span>{{ name }}</a>
+        <a class="tag-pill" href="{{ url_for('history.history', tag=name) }}"><span aria-hidden="true">#</span>{{ name }}</a>
         {% else %}
         <span class="tag-pill"><span aria-hidden="true">#</span>{{ name }}</span>
         {% endif %}
