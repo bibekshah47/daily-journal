@@ -8,9 +8,17 @@
 {% block content %}
 {# Every link and form on this page keeps the active tag filter. #}
 {% set tag_arg = active_tag or None %}
-<header class="page-header">
-    <h1>History</h1>
-    <p class="page-subtitle">{{ total_entries }} {{ 'entry' if total_entries == 1 else 'entries' }} so far.</p>
+<header class="page-header page-header-with-link">
+    <div>
+        <h1>History</h1>
+        <p class="page-subtitle">{{ total_entries }} {{ 'entry' if total_entries == 1 else 'entries' }} so far.</p>
+    </div>
+    {% if trashed_entries %}
+    <a href="{{ url_for('trash') }}" class="text-link trash-link">
+        <i data-lucide="trash-2" aria-hidden="true"></i>
+        Trash ({{ trashed_entries }})
+    </a>
+    {% endif %}
 </header>
 
 <div class="history-layout">

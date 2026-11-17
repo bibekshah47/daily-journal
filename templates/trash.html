@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+{% set active_page = 'history' %}
+
+{% block title %}Trash{% endblock %}
+{% block main_class %}trash-page{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('history') }}" class="back-link">
+    <i data-lucide="arrow-left" aria-hidden="true"></i>
+    History
+</a>
+
+<header class="page-header page-header-with-link">
+    <div>
+        <h1>Trash</h1>
+        <p class="page-subtitle">Deleted entries stay here for {{ trash_days }} days, then they're erased.</p>
+    </div>
+    {% if entries %}
+    <button type="button" class="button button-quiet button-danger-quiet" id="empty-open">
+        <i data-lucide="trash-2" aria-hidden="true"></i>
+        Empty trash
+    </button>
+    {% endif %}
+</header>
+
+{% if entries %}
+<div class="entry-list">
+    {% for entry in entries %}
+    <article class="entry-row {% if entry.mood in mood_lookup %}mood-{{ mood_lookup[entry.mood].key }}{% endif %}" id="entry-{{ entry.id }}">
+        <a href="{{ url_for('view_entry', entry_id=entry.id) }}" class="entry-row-link">
+            <div class="entry-row-meta">
+                <span>Deleted {{ entry.deleted_at | short_date }} ·
+                    {% if entry.erase_in_days == 0 %}erased today{% else %}erased in {{ entry.erase_in_days }} {{ 'day' if entry.erase_in_days == 1 else 'days' }}{% endif %}</span>
+                {{ ui.mood_badge(entry.mood) }}
+            </div>
+            <h3 class="entry-row-title">{{ entry.title or entry.date }}</h3>
+            <p class="entry-row-preview">{{ entry.content | truncate(160) }}</p>
+        </a>
+        <div class="entry-row-actions">
+            <form action="{{ url_for('restore_entry', entry_id=entry.id) }}" method="POST">
+                <input type="hidden" name="next" value="{{ url_for('trash') }}">
+                <button type="submit" class="button button-secondary">
+                    <i data-lucide="undo-2" aria-hidden="true"></i>
+                    Restore
+                </button>
+            </form>
+            <button type="button" class="button button-quiet button-danger-quiet purge-open"
+                    data-action="{{ url_for('purge_trashed_entry', entry_id=entry.id) }}"
+                    data-title="{{ entry.title or entry.date }}">
+                Delete forever
+            </button>
+        </div>
+    </article>
+    {% endfor %}
+</div>
+
+<!-- Delete one entry forever -->
+<dialog class="dialog" id="purge-dialog" aria-labelledby="purge-title">
+    <form method="POST" action="">
+        <h2 id="purge-title">Delete forever?</h2>
+        <p>“<span id="purge-name"></span>” will be erased. This can't be undone.</p>
+        <div class="dialog-actions">
+            <button type="button" class="button button-quiet dialog-cancel" autofocus>Keep it</button>
+            <button type="submit" class="button button-danger">Delete forever</button>
+        </div>
+    </form>
+</dialog>
+
+<!-- Empty the whole trash -->
+<dialog class="dialog" id="empty-dialog" aria-labelledby="empty-title">
+    <form action="{{ url_for('empty_trash_route') }}" method="POST">
+        <h2 id="empty-title">Empty trash?</h2>
+        <p>{{ entries|length }} {{ 'entry' if entries|length == 1 else 'entries' }} will be erased for good. This can't be undone.</p>
+        <div class="dialog-actions">
+            <button type="button" class="button button-quiet dialog-cancel" autofocus>Keep them</button>
+            <button type="submit" class="button button-danger">Empty trash</button>
+        </div>
+    </form>
+</dialog>
+{% else %}
+<div class="empty-state">
+    <i data-lucide="trash-2" aria-hidden="true"></i>
+    <h2>Trash is empty</h2>
+    <p>Deleted entries stay here for {{ trash_days }} days.</p>
+    <a href="{{ url_for('history') }}" class="button button-secondary">Back to History</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        const purgeDialog = document.getElementById("purge-dialog");
+        const emptyDialog = document.getElementById("empty-dialog");
+        if (!purgeDialog || !emptyDialog) return;
+
+        function open(dialog, fallbackText) {
+            if (dialog.showModal) {
+                dialog.showModal();
+            } else if (confirm(fallbackText)) {
+                dialog.querySelector("form").submit();
+            }
+        }
+
+        document.querySelectorAll(".purge-open").forEach(function (button) {
+            button.addEventListener("click", function () {
+                purgeDialog.querySelector("form").action = button.dataset.action;
+                document.getElementById("purge-name").textContent = button.dataset.title;
+                open(purgeDialog, "Delete this entry forever? This can't be undone.");
+            });
+        });
+        document.getElementById("empty-open").addEventListener("click", function () {
+            open(emptyDialog, emptyDialog.querySelector("p").textContent);
+        });
+        document.querySelectorAll(".dialog-cancel").forEach(function (button) {
+            button.addEventListener("click", function () { button.closest("dialog").close(); });
+        });
+    })();
+</script>
+{% endblock %}

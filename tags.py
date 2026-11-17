@@ -72,10 +72,12 @@ def get_tags_for_entries(connection, ids):
 
 
 def all_tags_with_counts(connection):
-    """[{"name": ..., "count": ...}] for every tag in use, alphabetical."""
+    """[{"name": ..., "count": ...}] for every tag on a live (not trashed) entry."""
     rows = connection.execute("""
         SELECT tags.name, COUNT(entry_tags.entry_id)
-        FROM tags JOIN entry_tags ON entry_tags.tag_id = tags.id
+        FROM tags
+        JOIN entry_tags ON entry_tags.tag_id = tags.id
+        JOIN live_entries ON live_entries.id = entry_tags.entry_id
         GROUP BY tags.id ORDER BY tags.name
     """).fetchall()
     return [{"name": name, "count": count} for name, count in rows]

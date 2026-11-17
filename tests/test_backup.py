@@ -127,7 +127,8 @@ class BackupTests(unittest.TestCase):
         columns = {row[1] for row in db.execute('PRAGMA table_info(entries)')}
         db.close()
         for entry in payload['entries']:
-            self.assertEqual(set(entry), columns | {'tags'})
+            # Exports only hold entries outside Trash, so deleted_at is left out.
+            self.assertEqual(set(entry), columns - {'deleted_at'} | {'tags'})
 
     def test_database_export_is_an_exact_copy(self):
         response = self.client.get('/backup/export.db')

@@ -182,6 +182,9 @@ class TagAppTests(unittest.TestCase):
         first = self.create(tags='shared, only-first')
         second = self.create(tags='shared')
         self.client.post(f'/delete/{first}')
+        # In Trash the entry keeps its tags, so Restore brings them back.
+        self.assertEqual(self.tags_of(first), ['shared', 'only-first'])
+        self.client.post(f'/trash/{first}/purge')
         db = connect(self.path)
         try:
             links = db.execute('SELECT COUNT(*) FROM entry_tags WHERE entry_id = ?', (first,)).fetchone()[0]

@@ -15,14 +15,17 @@ from journal_insights import get_journal_stats
 class InsightsTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(':memory:')
-        self.db.execute('CREATE TABLE entries (created_at TEXT, went_well TEXT, went_wrong TEXT, improve_tomorrow TEXT)')
+        self.db.execute('CREATE TABLE entries (created_at TEXT, went_well TEXT, went_wrong TEXT, improve_tomorrow TEXT, deleted_at TEXT)')
+        # Stats read the same view the app uses, which hides entries in Trash.
+        self.db.execute('CREATE VIEW live_entries AS SELECT * FROM entries WHERE deleted_at IS NULL')
 
     def tearDown(self):
         self.db.close()
 
     def add(self, day, *answers):
         answers = list(answers) + [None] * (3 - len(answers))
-        self.db.execute('INSERT INTO entries VALUES (?,?,?,?)', (day, *answers))
+        self.db.execute('INSERT INTO entries (created_at, went_well, went_wrong, improve_tomorrow) '
+                        'VALUES (?,?,?,?)', (day, *answers))
 
     def stats(self, today=date(2026, 11, 13)):
         return get_journal_stats(self.db, today)

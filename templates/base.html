@@ -48,13 +48,22 @@
         {% block content %}{% endblock %}
     </main>
 
-    {% with messages = get_flashed_messages() %}
+    {# A message flashed with category "undo:<id>" gets an Undo button that
+       restores that entry and comes back to this page. #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
     <div class="toast-region" role="status" aria-live="polite">
-        {% for message in messages %}
-        <div class="toast">
+        {% for category, message in messages %}
+        {% set undo_id = category[5:] if category.startswith('undo:') else '' %}
+        <div class="toast {% if undo_id.isdigit() %}toast-has-action{% endif %}">
             <i data-lucide="check" aria-hidden="true"></i>
             <span>{{ message }}</span>
+            {% if undo_id.isdigit() %}
+            <form action="{{ url_for('restore_entry', entry_id=undo_id|int) }}" method="POST" class="toast-action">
+                <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
+                <button type="submit" class="toast-button">Undo</button>
+            </form>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -64,12 +73,22 @@
     {% block scripts %}{% endblock %}
     <script>
         lucide.createIcons();
-        // Fade out "Entry saved" style messages after a few seconds.
-        setTimeout(function () {
-            document.querySelectorAll(".toast").forEach(function (toast) {
+        // Fade out "Entry saved" style messages after a few seconds. Toasts with
+        // an Undo button stay longer, and never vanish while they have focus.
+        document.querySelectorAll(".toast").forEach(function (toast) {
+            const hasAction = toast.classList.contains("toast-has-action");
+            function hide() {
+                if (toast.contains(document.activeElement)) {
+                    toast.addEventListener("focusout", function later() {
+                        toast.removeEventListener("focusout", later);
+                        setTimeout(hide, 1500);
+                    });
+                    return;
+                }
                 toast.classList.add("toast-hide");
-            });
-        }, 3500);
+            }
+            setTimeout(hide, hasAction ? 8000 : 3500);
+        });
     </script>
 </body>
 </html>

@@ -178,6 +178,9 @@ class RichTextTests(unittest.TestCase):
         self.assertIn('search=Find',response.location)
         self.assertIn('Find me',self.client.get('/history?favorites=1').text)
         self.assertEqual(self.client.post(f'/delete/{entry_id}').status_code,302)
+        # Deleting moves the entry to Trash; erasing it from there makes it 404.
+        self.assertIn('This entry is in Trash',self.client.get(f'/entry/{entry_id}').text)
+        self.client.post(f'/trash/{entry_id}/purge')
         self.assertEqual(self.client.get(f'/entry/{entry_id}').status_code,404)
         self.assertEqual(prepare_content({'journal':'literal <b>text</b>'}),('literal <b>text</b>',None))
 

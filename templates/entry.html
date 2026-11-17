@@ -11,6 +11,7 @@
         <i data-lucide="arrow-left" aria-hidden="true"></i>
         History
     </a>
+    {% if not entry['deleted_at'] %}
     <div class="entry-tools">
         <form action="{{ url_for('toggle_favorite', entry_id=entry['id']) }}" method="POST">
             <input type="hidden" name="next" value="{{ url_for('view_entry', entry_id=entry['id']) }}">
@@ -30,7 +31,23 @@
             <i data-lucide="trash-2" aria-hidden="true"></i>
         </button>
     </div>
+    {% endif %}
 </div>
+
+{% if entry['deleted_at'] %}
+<div class="trash-notice" role="note">
+    <i data-lucide="trash-2" aria-hidden="true"></i>
+    <p><strong>This entry is in Trash</strong>
+       <span>It will be erased on {{ entry['deleted_at'] | erase_date }}.</span></p>
+    <form action="{{ url_for('restore_entry', entry_id=entry['id']) }}" method="POST">
+        <input type="hidden" name="next" value="{{ url_for('view_entry', entry_id=entry['id']) }}">
+        <button type="submit" class="button button-secondary">
+            <i data-lucide="undo-2" aria-hidden="true"></i>
+            Restore
+        </button>
+    </form>
+</div>
+{% endif %}
 
 <article class="reading">
     <header class="reading-header">
@@ -91,17 +108,19 @@
     {% endif %}
 </nav>
 
+{% if not entry['deleted_at'] %}
 <!-- Delete confirmation -->
 <dialog class="dialog" id="delete-dialog" aria-labelledby="delete-title">
     <form action="{{ url_for('delete_entry', entry_id=entry['id']) }}" method="POST">
         <h2 id="delete-title">Delete this entry?</h2>
-        <p>“{{ entry["title"] or (entry["created_at"] | friendly_date) }}” will be removed for good. This can't be undone.</p>
+        <p>It moves to Trash. You can restore it for 30 days.</p>
         <div class="dialog-actions">
             <button type="button" class="button button-quiet" id="delete-cancel" autofocus>Keep it</button>
             <button type="submit" class="button button-danger">Delete entry</button>
         </div>
     </form>
 </dialog>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -119,19 +138,21 @@
 {% endif %}
 <script>
     const deleteDialog = document.getElementById("delete-dialog");
-    document.getElementById("delete-open").addEventListener("click", function () {
-        if (deleteDialog.showModal) {
-            deleteDialog.showModal();
-        } else if (confirm("Delete this entry? This can't be undone.")) {
-            deleteDialog.querySelector("form").submit();
-        }
-    });
-    document.getElementById("delete-cancel").addEventListener("click", function () {
-        deleteDialog.close();
-    });
+    if (deleteDialog) {
+        document.getElementById("delete-open").addEventListener("click", function () {
+            if (deleteDialog.showModal) {
+                deleteDialog.showModal();
+            } else if (confirm("Delete this entry? It moves to Trash. You can restore it for 30 days.")) {
+                deleteDialog.querySelector("form").submit();
+            }
+        });
+        document.getElementById("delete-cancel").addEventListener("click", function () {
+            deleteDialog.close();
+        });
+    }
     // Arrow keys move between older and newer entries.
     document.addEventListener("keydown", function (event) {
-        if (event.target.closest("input, textarea, [contenteditable]") || deleteDialog.open) return;
+        if (event.target.closest("input, textarea, [contenteditable]") || (deleteDialog && deleteDialog.open)) return;
         const link = event.key === "ArrowLeft" ? document.querySelector(".pager-link:not(.pager-newer)")
                    : event.key === "ArrowRight" ? document.querySelector(".pager-newer") : null;
         if (link) window.location = link.href;

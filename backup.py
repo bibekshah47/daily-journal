@@ -154,12 +154,19 @@ def entries_to_markdown(rows, tags_by_id, exported_at):
     return "\n---\n\n".join(parts)
 
 
+def _exported(row, tags_by_id):
+    entry = dict(row, tags=tags_by_id.get(row["id"], []))
+    # Exports only hold live entries, so this is always empty; leave it out.
+    entry.pop("deleted_at", None)
+    return entry
+
+
 def entries_to_json(rows, tags_by_id, exported_at):
     payload = {
         "app": EXPORT_APP,
         "version": EXPORT_VERSION,
         "exported_at": exported_at.isoformat(timespec="seconds"),
-        "entries": [dict(row, tags=tags_by_id.get(row["id"], [])) for row in rows],
+        "entries": [_exported(row, tags_by_id) for row in rows],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
@@ -234,6 +241,8 @@ def restore_entries(connection, entries):
     added = skipped = 0
     with connection:
         connection.execute("BEGIN IMMEDIATE")
+        # Read "entries", not "live_entries": an entry in Trash still counts
+        # as existing, so restoring a backup never duplicates it.
         seen = {(row[0], row[1]) for row in
                 connection.execute("SELECT created_at, content FROM entries")}
         # Oldest first, so restored entries get ids in the order they were written.

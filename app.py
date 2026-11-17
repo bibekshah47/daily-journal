@@ -22,8 +22,9 @@ from backup import (RestoreError, database_bytes, entries_to_json,
 from rich_text import prepare_content, safe_journal_html
 from journal_insights import get_journal_stats
 from memories import get_memories
-from tags import (all_tags_with_counts, delete_unused_tags, get_tags_for_entries,
-                  normalize_tag, parse_tags, set_entry_tags)
+from tags import (all_tags_with_counts, get_tags_for_entries, normalize_tag,
+                  parse_tags, set_entry_tags)
+from trash import TRASH_DAYS, cleanup_trash, empty_trash, purge_entry
 
 
 # Create the Flask application
@@ -61,7 +62,8 @@ _daily_backup_lock = threading.Lock()
 
 @app.before_request
 def ensure_daily_backup():
-    """On the first request each day, save a dated copy to backups/.
+    """On the first request each day, save a dated copy to backups/,
+    then erase entries that have been in Trash for more than 30 days.
 
     A failed backup is logged and never stops the page from loading. It is
     not retried until the next day (or a server restart), so a persistent
@@ -80,7 +82,22 @@ def ensure_daily_backup():
             run_daily_backup(database_path, key[1])
         except Exception:
             app.logger.exception("Automatic daily backup failed")
+        # After the backup, so entries about to be erased are in today's copy.
+        try:
+            run_trash_cleanup(database_path)
+        except Exception:
+            app.logger.exception("Automatic trash cleanup failed")
         _daily_backups_checked.add(key)
+
+
+def run_trash_cleanup(database_path):
+    """Erase entries that have been in Trash for more than 30 days."""
+    connection = connect(database_path)
+    try:
+        with connection:
+            return cleanup_trash(connection, datetime.now())
+    finally:
+        connection.close()
 
 
 app.jinja_env.filters["journal_html"] = safe_journal_html
@@ -145,7 +162,14 @@ def short_date(value):
     return moment.strftime("%b %d, %Y").replace(" 0", " ")
 
 
+def erase_date(deleted_at):
+    """The day a trashed entry is due to be erased: "December 16, 2026"."""
+    deleted = parse_timestamp(deleted_at)
+    return friendly_date(deleted + timedelta(days=TRASH_DAYS)) if deleted else ""
+
+
 app.jinja_env.filters["friendly_date"] = friendly_date
+app.jinja_env.filters["erase_date"] = erase_date
 app.jinja_env.filters["short_date"] = short_date
 app.jinja_env.filters["friendly_time"] = friendly_time
 
@@ -224,7 +248,7 @@ def home():
     # The three most recent journal entries
     rows = connection.execute("""
         SELECT *
-        FROM entries
+        FROM live_entries
         ORDER BY created_at DESC, id DESC
         LIMIT 3
     """).fetchall()
@@ -232,7 +256,7 @@ def home():
 
     # Did the user already write today? Link to that entry if so.
     today_entry = connection.execute("""
-        SELECT id, title FROM entries
+        SELECT id, title FROM live_entries
         WHERE date(created_at) = ?
         ORDER BY created_at DESC LIMIT 1
     """, (today.isoformat(),)).fetchone()
@@ -244,7 +268,7 @@ def home():
     start = today - timedelta(days=13)
     mood_rows = connection.execute("""
         SELECT date(created_at) AS day, mood
-        FROM entries
+        FROM live_entries
         WHERE date(created_at) >= ?
         ORDER BY created_at
     """, (start.isoformat(),)).fetchall()
@@ -287,7 +311,7 @@ def insights():
     try:
         stats = get_journal_stats(connection)
         mood_counts = dict(connection.execute(
-            "SELECT mood, COUNT(*) FROM entries WHERE mood IS NOT NULL AND mood != '' GROUP BY mood"
+            "SELECT mood, COUNT(*) FROM live_entries WHERE mood IS NOT NULL AND mood != '' GROUP BY mood"
         ).fetchall())
     finally:
         connection.close()
@@ -300,19 +324,105 @@ def insights():
                            most_mood_entries=most_entries, **stats)
 
 
-# Delete an existing journal entry
+# Move an entry to Trash. It keeps its tags and can be restored for 30 days.
 @app.route("/delete/<int:entry_id>", methods=["POST"])
 def delete_entry(entry_id):
 
     connection = connect(app.config["DATABASE"])
-    # Foreign keys cascade the entry's tag links; then drop tags left unused.
-    connection.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
-    delete_unused_tags(connection)
-    connection.commit()
-    connection.close()
+    try:
+        with connection:
+            moved = connection.execute(
+                "UPDATE entries SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+                (datetime.now().isoformat(), entry_id),
+            ).rowcount
+    finally:
+        connection.close()
 
-    flash("Entry deleted.")
+    if moved:
+        # The "undo:<id>" category adds an Undo button to the toast.
+        flash("Entry moved to Trash.", f"undo:{entry_id}")
     return redirect(url_for("history"))
+
+
+@app.route("/restore/<int:entry_id>", methods=["POST"])
+def restore_entry(entry_id):
+    connection = connect(app.config["DATABASE"])
+    try:
+        with connection:
+            restored = connection.execute(
+                "UPDATE entries SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL",
+                (entry_id,),
+            ).rowcount
+    finally:
+        connection.close()
+
+    if restored:
+        flash("Entry restored.")
+    return redirect(safe_next_url(url_for("view_entry", entry_id=entry_id)))
+
+
+def trash_count(connection):
+    return connection.execute(
+        "SELECT COUNT(*) FROM entries WHERE deleted_at IS NOT NULL").fetchone()[0]
+
+
+def erase_in_days(deleted_at, today):
+    """Days left before the automatic cleanup erases a trashed entry."""
+    deleted = parse_timestamp(deleted_at)
+    if not deleted:
+        return 0
+    return max(0, (deleted.date() + timedelta(days=TRASH_DAYS) - today).days)
+
+
+@app.route("/trash")
+def trash():
+    today = date.today()
+    connection = get_connection()
+    try:
+        rows = connection.execute("""
+            SELECT * FROM entries
+            WHERE deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC, id DESC
+        """).fetchall()
+    finally:
+        connection.close()
+
+    entries = []
+    for row in rows:
+        entry = entry_summary(row)
+        entry["deleted_at"] = row["deleted_at"]
+        entry["created_at"] = row["created_at"]
+        entry["erase_in_days"] = erase_in_days(row["deleted_at"], today)
+        entries.append(entry)
+    return render_template("trash.html", entries=entries, trash_days=TRASH_DAYS)
+
+
+@app.route("/trash/<int:entry_id>/purge", methods=["POST"])
+def purge_trashed_entry(entry_id):
+    connection = connect(app.config["DATABASE"])
+    try:
+        with connection:
+            erased = purge_entry(connection, entry_id)
+    finally:
+        connection.close()
+
+    if erased:
+        flash("Entry deleted forever.")
+    return redirect(url_for("trash"))
+
+
+@app.route("/trash/empty", methods=["POST"])
+def empty_trash_route():
+    connection = connect(app.config["DATABASE"])
+    try:
+        with connection:
+            erased = empty_trash(connection)
+    finally:
+        connection.close()
+
+    if erased:
+        flash("Trash emptied.")
+    return redirect(url_for("trash"))
 
 
 # Edit an existing journal entry
@@ -321,6 +431,13 @@ def edit_entry(entry_id):
 
     connection = get_connection()
     cursor = connection.cursor()
+
+    # Entries in Trash can't be edited; their page offers Restore instead.
+    status = cursor.execute(
+        "SELECT deleted_at FROM entries WHERE id = ?", (entry_id,)).fetchone()
+    if status is not None and status["deleted_at"]:
+        connection.close()
+        return redirect(url_for("view_entry", entry_id=entry_id))
 
     # Check whether the user submitted the edit form
     if request.method == "POST":
@@ -341,7 +458,7 @@ def edit_entry(entry_id):
                 UPDATE entries
                 SET content = ?, mood = ?, title = ?, content_html = ?,
                     went_well = ?, went_wrong = ?, improve_tomorrow = ?
-                WHERE id = ?
+                WHERE id = ? AND deleted_at IS NULL
                 """,
                 (updated_content, updated_mood, updated_title, content_html,
                  *(reflections[field] for field in REFLECTION_FIELDS), entry_id)
@@ -356,7 +473,7 @@ def edit_entry(entry_id):
             return redirect(url_for("view_entry", entry_id=entry_id))
 
     # Retrieve the journal entry being edited
-    cursor.execute("SELECT * FROM entries WHERE id = ?", (entry_id,))
+    cursor.execute("SELECT * FROM live_entries WHERE id = ?", (entry_id,))
     row = cursor.fetchone()
     entry = dict(row) if row is not None else None
     if entry is not None:
@@ -388,7 +505,7 @@ def toggle_favorite(entry_id):
     connection.execute("""
         UPDATE entries
         SET is_favorite = CASE WHEN is_favorite = 1 THEN 0 ELSE 1 END
-        WHERE id = ?
+        WHERE id = ? AND deleted_at IS NULL
     """, (entry_id,))
     connection.commit()
     connection.close()
@@ -455,7 +572,7 @@ def history():
     # Dates that contain journal entries, with the mood of the latest one
     cursor.execute("""
         SELECT date(created_at) AS entry_date, mood
-        FROM entries
+        FROM live_entries
         ORDER BY created_at
     """)
     calendar_moods = {}
@@ -464,7 +581,7 @@ def history():
     calendar_entry_dates = set(calendar_moods)
 
     # Build the journal search query
-    query = "SELECT * FROM entries WHERE 1=1"
+    query = "SELECT * FROM live_entries WHERE 1=1"
     parameters = []
 
     if favorites_only:
@@ -496,8 +613,9 @@ def history():
     cursor.execute(query, parameters)
     rows = cursor.fetchall()
 
-    cursor.execute("SELECT COUNT(*) FROM entries")
+    cursor.execute("SELECT COUNT(*) FROM live_entries")
     total_entries = cursor.fetchone()[0]
+    trashed_entries = trash_count(connection)
     entries = attach_tags(connection, [entry_summary(row) for row in rows])
     connection.close()
 
@@ -526,6 +644,7 @@ def history():
         calendar_moods=calendar_moods,
         favorites_only=favorites_only,
         active_tag=active_tag,
+        trashed_entries=trashed_entries,
         today=today,
     )
 
@@ -535,6 +654,7 @@ def history():
 def view_entry(entry_id):
 
     connection = get_connection()
+    # "entries", not "live_entries": a trashed entry opens with a Restore notice.
     row = connection.execute(
         "SELECT * FROM entries WHERE id = ?", (entry_id,)
     ).fetchone()
@@ -548,12 +668,12 @@ def view_entry(entry_id):
 
     # Find the next older and newer entries for "previous / next" links
     older = connection.execute("""
-        SELECT id, title, created_at FROM entries
+        SELECT id, title, created_at FROM live_entries
         WHERE created_at < ? OR (created_at = ? AND id < ?)
         ORDER BY created_at DESC, id DESC LIMIT 1
     """, (entry["created_at"], entry["created_at"], entry_id)).fetchone()
     newer = connection.execute("""
-        SELECT id, title, created_at FROM entries
+        SELECT id, title, created_at FROM live_entries
         WHERE created_at > ? OR (created_at = ? AND id > ?)
         ORDER BY created_at ASC, id ASC LIMIT 1
     """, (entry["created_at"], entry["created_at"], entry_id)).fetchone()
@@ -629,7 +749,7 @@ def render_backup_page(error=None, status=200):
     connection = connect(app.config["DATABASE"])
     try:
         total, oldest, newest = connection.execute(
-            "SELECT COUNT(*), MIN(created_at), MAX(created_at) FROM entries"
+            "SELECT COUNT(*), MIN(created_at), MAX(created_at) FROM live_entries"
         ).fetchone()
     finally:
         connection.close()
@@ -650,11 +770,11 @@ def render_backup_page(error=None, status=200):
 
 
 def all_entries_newest_first():
-    """Every entry, newest first, plus {entry_id: [tag names]}."""
+    """Every entry not in Trash, newest first, plus {entry_id: [tag names]}."""
     connection = get_connection()
     try:
         rows = connection.execute(
-            "SELECT * FROM entries ORDER BY created_at DESC, id DESC"
+            "SELECT * FROM live_entries ORDER BY created_at DESC, id DESC"
         ).fetchall()
         return rows, get_tags_for_entries(connection, [row["id"] for row in rows])
     finally:

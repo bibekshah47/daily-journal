@@ -49,7 +49,7 @@ def get_memories(connection, today, limit=3):
     Today's entries and repeats are never included. Each entry carries "tags".
     """
     oldest = connection.execute(
-        "SELECT MIN(date(created_at)) FROM entries").fetchone()[0]
+        "SELECT MIN(date(created_at)) FROM live_entries").fetchone()[0]
     if not oldest or limit <= 0:
         return []
     oldest = date.fromisoformat(oldest)
@@ -64,7 +64,7 @@ def get_memories(connection, today, limit=3):
     placeholders = ", ".join("?" for _ in days)
     rows = connection.execute(f"""
         SELECT {", ".join(_COLUMNS)}, date(created_at)
-        FROM entries
+        FROM live_entries
         WHERE date(created_at) IN ({placeholders})
         ORDER BY created_at, id
     """, sorted(days)).fetchall()

@@ -270,6 +270,8 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.75; flex-shrink: 0; }
 .page-kicker, .page-subtitle { color: var(--ink-faint); font-size: var(--text-sm); }
 .page-kicker { margin-bottom: 6px; }
 .page-subtitle { margin-top: 8px; font-size: var(--text-md); }
+/* A header with a small link or button on the right (History → Trash). */
+.page-header-with-link { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; }
 
 @media (max-width: 760px) {
     .page-header h1 { font-size: var(--text-2xl); }
@@ -320,6 +322,8 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.75; flex-shrink: 0; }
 
 .button-danger { background: var(--danger); color: var(--surface); }
 .button-danger:hover { filter: brightness(0.92); }
+.button-danger-quiet { color: var(--danger); }
+.button-danger-quiet:hover { background: var(--danger-soft); color: var(--danger); }
 
 .icon-button {
     display: inline-grid;
@@ -445,6 +449,9 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
 }
 
 .favorite-form { position: absolute; top: 12px; right: 12px; z-index: 1; }
+/* Buttons inside a card sit above the card-wide link. */
+.entry-row-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.entry-row-actions form { margin: 0; }
 .entry-row-tags { margin-top: 10px; }
 /* Tag links sit above the card-wide link so they stay clickable. */
 .entry-row.has-actions .entry-row-tags { position: relative; z-index: 1; width: fit-content; max-width: 100%; }
@@ -508,7 +515,23 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
     transition: opacity 0.4s, transform 0.4s;
 }
 .toast svg.lucide { width: 16px; height: 16px; color: var(--mood-happy); }
-.toast-hide { opacity: 0; transform: translateY(8px); pointer-events: none; }
+/* visibility (delayed until the fade ends) also takes hidden buttons out of the tab order. */
+.toast-hide { opacity: 0; transform: translateY(8px); pointer-events: none; visibility: hidden; transition: opacity 0.4s, transform 0.4s, visibility 0s 0.4s; }
+.toast-has-action { padding-right: 6px; }
+.toast-action { margin: 0 0 0 6px; }
+.toast-button {
+    min-height: 32px;
+    padding: 4px 12px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--accent-soft);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    cursor: pointer;
+}
+.toast-button:hover { background: color-mix(in srgb, var(--paper) 14%, transparent); }
+.toast-button:focus-visible { outline-color: var(--paper); border-radius: 999px; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 @media (min-width: 761px) { .toast-region { left: calc(50% + var(--sidebar-width) / 2); } }
 @media (max-width: 760px) { .toast-region { bottom: calc(var(--tabbar-height) + 20px); } }
@@ -969,6 +992,10 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
     color: var(--ink-faint);
 }
 .history-results .empty-state { margin-top: 20px; }
+.trash-link { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); }
+.trash-link svg.lucide { width: 16px; height: 16px; }
+.trash-link:hover { color: var(--ink); }
+.trash-page .back-link { margin-bottom: 20px; }
 
 
 /* ---------- 5d. Reading an entry ---------- */
@@ -985,6 +1012,25 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
 .entry-tools .button { margin: 0 4px; }
 
 .main > .reading { max-width: 720px; }
+
+/* "This entry is in Trash" */
+.trash-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 14px;
+    /* Only top/bottom: the column's auto side margins keep it aligned. */
+    margin-top: -16px;
+    margin-bottom: 32px;
+    padding: 14px 16px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface-sunken);
+}
+.trash-notice > svg.lucide { color: var(--ink-faint); }
+.trash-notice p { flex: 1; min-width: 12rem; font-size: var(--text-sm); color: var(--ink-soft); }
+.trash-notice strong { display: block; color: var(--ink); font-weight: 600; }
+.trash-notice form { margin: 0; }
 .reading-header { margin-bottom: 28px; }
 .reading-tags { margin-top: 12px; }
 .reading-date { font-size: var(--text-sm); color: var(--ink-faint); }

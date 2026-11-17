@@ -40,6 +40,8 @@ def initialize_database(database_path="journal.db"):
                 "went_well": "TEXT",
                 "went_wrong": "TEXT",
                 "improve_tomorrow": "TEXT",
+                # When the entry was moved to Trash; NULL means not deleted.
+                "deleted_at": "TEXT",
             }
             for name, definition in additions.items():
                 if name not in columns:
@@ -59,6 +61,13 @@ def initialize_database(database_path="journal.db"):
                     PRIMARY KEY (entry_id, tag_id)
                 )
             """)
+            # Everything the app shows reads from this view, so trashed
+            # entries are hidden in one place. SQLite expands "*" when the
+            # view is used, so columns added later appear here too.
+            connection.execute(
+                "CREATE VIEW IF NOT EXISTS live_entries AS "
+                "SELECT * FROM entries WHERE deleted_at IS NULL"
+            )
             # The History tag filter looks entries up by tag.
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS entry_tags_by_tag ON entry_tags (tag_id)"

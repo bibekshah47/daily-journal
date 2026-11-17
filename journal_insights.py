@@ -11,7 +11,7 @@ REFLECTION_QUESTIONS = (
 def get_journal_stats(connection, today=None):
     today = today or date.today()
     rows = connection.execute('''
-        SELECT created_at, went_well, went_wrong, improve_tomorrow FROM entries
+        SELECT created_at, went_well, went_wrong, improve_tomorrow FROM live_entries
     ''').fetchall()
     dates = set()
     monthly_entries = 0
