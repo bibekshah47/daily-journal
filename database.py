@@ -3,8 +3,19 @@ import sqlite3
 import os
 
 
-def initialize_database(database_path="journal.db"):
+def connect(database_path):
+    """Open a connection with foreign keys enforced (SQLite leaves them off).
+
+    Every connection the app opens goes through here, so deleting an entry
+    also deletes its tag links.
+    """
     connection = sqlite3.connect(database_path)
+    connection.execute("PRAGMA foreign_keys = ON")
+    return connection
+
+
+def initialize_database(database_path="journal.db"):
+    connection = connect(database_path)
     try:
         with connection:
             # Serialize schema checks and upgrades across concurrent requests.
@@ -35,6 +46,23 @@ def initialize_database(database_path="journal.db"):
                     connection.execute(
                         f"ALTER TABLE entries ADD COLUMN {name} {definition}"
                     )
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS tags (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS entry_tags (
+                    entry_id INTEGER NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+                    tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+                    PRIMARY KEY (entry_id, tag_id)
+                )
+            """)
+            # The History tag filter looks entries up by tag.
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS entry_tags_by_tag ON entry_tags (tag_id)"
+            )
     finally:
         connection.close()
 

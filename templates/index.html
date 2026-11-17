@@ -97,6 +97,7 @@
             </div>
             <h3 class="entry-row-title">{{ entry.title or entry.date }}</h3>
             <p class="entry-row-preview">{{ entry.content | truncate(160) }}</p>
+            {{ ui.tag_pills(entry.tags, class="entry-row-tags") }}
         </a>
         {% endfor %}
     </div>

@@ -14,13 +14,15 @@ import os
 import secrets
 import io
 import threading
-from database import initialize_database
+from database import connect, initialize_database
 from backup import (RestoreError, database_bytes, entries_to_json,
                     entries_to_markdown, backup_folder, latest_backup_time,
                     parse_backup, restore_entries, restore_message,
                     run_daily_backup)
 from rich_text import prepare_content, safe_journal_html
 from journal_insights import get_journal_stats
+from tags import (all_tags_with_counts, delete_unused_tags, get_tags_for_entries,
+                  normalize_tag, parse_tags, set_entry_tags)
 
 
 # Create the Flask application
@@ -154,7 +156,7 @@ def shared_template_values():
 
 
 def get_connection():
-    connection = sqlite3.connect(app.config["DATABASE"])
+    connection = connect(app.config["DATABASE"])
     connection.row_factory = sqlite3.Row
     return connection
 
@@ -170,7 +172,25 @@ def entry_summary(row):
         "date": friendly_date(created_at) if created_at else row["created_at"],
         "time": friendly_time(created_at),
         "is_favorite": row["is_favorite"],
+        "tags": [],
     }
+
+
+def attach_tags(connection, entries):
+    """Fill in each entry summary's "tags" list with one query."""
+    tags = get_tags_for_entries(connection, [entry["id"] for entry in entries])
+    for entry in entries:
+        entry["tags"] = tags.get(entry["id"], [])
+    return entries
+
+
+def tag_suggestions():
+    """Existing tag names for the form's <datalist>."""
+    connection = connect(app.config["DATABASE"])
+    try:
+        return [tag["name"] for tag in all_tags_with_counts(connection)]
+    finally:
+        connection.close()
 
 
 def safe_next_url(fallback):
@@ -207,7 +227,7 @@ def home():
         ORDER BY created_at DESC, id DESC
         LIMIT 3
     """).fetchall()
-    recent_entries = [entry_summary(row) for row in rows]
+    recent_entries = attach_tags(connection, [entry_summary(row) for row in rows])
 
     # Did the user already write today? Link to that entry if so.
     today_entry = connection.execute("""
@@ -258,7 +278,7 @@ def home():
 
 @app.route("/insights")
 def insights():
-    connection = sqlite3.connect(app.config["DATABASE"])
+    connection = connect(app.config["DATABASE"])
     try:
         stats = get_journal_stats(connection)
         mood_counts = dict(connection.execute(
@@ -279,8 +299,10 @@ def insights():
 @app.route("/delete/<int:entry_id>", methods=["POST"])
 def delete_entry(entry_id):
 
-    connection = sqlite3.connect(app.config["DATABASE"])
+    connection = connect(app.config["DATABASE"])
+    # Foreign keys cascade the entry's tag links; then drop tags left unused.
     connection.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
+    delete_unused_tags(connection)
     connection.commit()
     connection.close()
 
@@ -302,6 +324,7 @@ def edit_entry(entry_id):
         updated_content, content_html = prepare_content(request.form)
         updated_mood = request.form.get("mood")
         updated_title = request.form.get("title", "").strip()
+        updated_tags = parse_tags(request.form.get("tags", ""))
         reflections = {field: request.form.get(field, "").strip()
                        for field in REFLECTION_FIELDS}
 
@@ -318,6 +341,8 @@ def edit_entry(entry_id):
                 (updated_content, updated_mood, updated_title, content_html,
                  *(reflections[field] for field in REFLECTION_FIELDS), entry_id)
             )
+            if cursor.rowcount:
+                set_entry_tags(connection, entry_id, updated_tags)
 
             connection.commit()
             connection.close()
@@ -329,6 +354,8 @@ def edit_entry(entry_id):
     cursor.execute("SELECT * FROM entries WHERE id = ?", (entry_id,))
     row = cursor.fetchone()
     entry = dict(row) if row is not None else None
+    if entry is not None:
+        entry["tags"] = get_tags_for_entries(connection, [entry_id])[entry_id]
     connection.close()
 
     if entry is None:
@@ -338,18 +365,21 @@ def edit_entry(entry_id):
     if request.method == "POST":
         entry = dict(entry)
         entry.update(title=updated_title, content=updated_content or "",
-                     mood=updated_mood, content_html=content_html, **reflections)
+                     mood=updated_mood, content_html=content_html,
+                     tags=updated_tags, **reflections)
         return render_template("edit.html", entry=entry,
+                               tag_suggestions=tag_suggestions(),
                                error="Write something in your entry before saving."), 400
 
-    return render_template("edit.html", entry=entry)
+    return render_template("edit.html", entry=entry,
+                           tag_suggestions=tag_suggestions())
 
 
 # Favorite or unfavorite a journal entry
 @app.route("/favorite/<int:entry_id>", methods=["POST"])
 def toggle_favorite(entry_id):
 
-    connection = sqlite3.connect(app.config["DATABASE"])
+    connection = connect(app.config["DATABASE"])
     connection.execute("""
         UPDATE entries
         SET is_favorite = CASE WHEN is_favorite = 1 THEN 0 ELSE 1 END
@@ -363,7 +393,8 @@ def toggle_favorite(entry_id):
         "search": request.form.get("search", ""),
         "filter_date": request.form.get("filter_date", ""),
         "month": request.form.get("month", ""),
-        "favorites": request.form.get("favorites", "")
+        "favorites": request.form.get("favorites", ""),
+        "tag": request.form.get("tag", ""),
     }
     params = {key: value for key, value in params.items() if value}
 
@@ -380,6 +411,7 @@ def history():
     filter_date = request.args.get("filter_date", "").strip()
     selected_month = request.args.get("month", "").strip()
     favorites_only = request.args.get("favorites", "") == "1"
+    active_tag = normalize_tag(request.args.get("tag", ""))
 
     # Validate the selected date
     if filter_date:
@@ -434,9 +466,21 @@ def history():
         query += " AND is_favorite = 1"
 
     if search_query:
-        query += " AND (title LIKE ? OR content LIKE ?)"
+        query += """ AND (title LIKE ? OR content LIKE ? OR id IN (
+            SELECT entry_tags.entry_id FROM entry_tags
+            JOIN tags ON tags.id = entry_tags.tag_id
+            WHERE tags.name LIKE ?))"""
         keyword = f"%{search_query}%"
-        parameters.extend([keyword, keyword])
+        # "#work" should find the tag "work".
+        tag_keyword = f"%{search_query.lstrip('#')}%"
+        parameters.extend([keyword, keyword, tag_keyword])
+
+    if active_tag:
+        query += """ AND id IN (
+            SELECT entry_tags.entry_id FROM entry_tags
+            JOIN tags ON tags.id = entry_tags.tag_id
+            WHERE tags.name = ?)"""
+        parameters.append(active_tag)
 
     if filter_date:
         query += " AND date(created_at) = ?"
@@ -449,14 +493,12 @@ def history():
 
     cursor.execute("SELECT COUNT(*) FROM entries")
     total_entries = cursor.fetchone()[0]
+    entries = attach_tags(connection, [entry_summary(row) for row in rows])
     connection.close()
 
     # Group entries by month so the list is easier to scan
-    entries = []
     groups = []
-    for row in rows:
-        entry = entry_summary(row)
-        entries.append(entry)
+    for row, entry in zip(rows, entries):
         created_at = parse_timestamp(row["created_at"])
         label = created_at.strftime("%B %Y") if created_at else "Other"
         if not groups or groups[-1]["label"] != label:
@@ -478,6 +520,7 @@ def history():
         calendar_entry_dates=calendar_entry_dates,
         calendar_moods=calendar_moods,
         favorites_only=favorites_only,
+        active_tag=active_tag,
         today=today,
     )
 
@@ -496,6 +539,7 @@ def view_entry(entry_id):
         abort(404)
 
     entry = dict(row)
+    entry["tags"] = get_tags_for_entries(connection, [entry_id])[entry_id]
 
     # Find the next older and newer entries for "previous / next" links
     older = connection.execute("""
@@ -522,6 +566,7 @@ def write_journal():
 
         title = request.form.get("title", "").strip()
         mood = request.form.get("mood", "").strip()
+        tags = parse_tags(request.form.get("tags", ""))
         content, content_html = prepare_content(request.form)
         reflections = {field: request.form.get(field, "").strip()
                        for field in REFLECTION_FIELDS}
@@ -533,6 +578,8 @@ def write_journal():
                 error="Write something in your entry before saving.",
                 title=title,
                 mood=mood,
+                tags=tags,
+                tag_suggestions=tag_suggestions(),
                 content=content,
                 content_html=content_html,
                 prompt=WRITING_PROMPTS[date.today().toordinal() % len(WRITING_PROMPTS)],
@@ -541,7 +588,7 @@ def write_journal():
 
         created_at = datetime.now().isoformat()
 
-        connection = sqlite3.connect(app.config["DATABASE"])
+        connection = connect(app.config["DATABASE"])
         cursor = connection.cursor()
         cursor.execute("""
             INSERT INTO entries
@@ -551,6 +598,7 @@ def write_journal():
         """, (title, content, mood, created_at, content_html,
               *(reflections[field] for field in REFLECTION_FIELDS)))
         entry_id = cursor.lastrowid
+        set_entry_tags(connection, entry_id, tags)
         connection.commit()
         connection.close()
 
@@ -563,6 +611,8 @@ def write_journal():
         error=None,
         title="",
         mood="",
+        tags=[],
+        tag_suggestions=tag_suggestions(),
         content="",
         prompt=WRITING_PROMPTS[date.today().toordinal() % len(WRITING_PROMPTS)],
         **{field: "" for field in REFLECTION_FIELDS}
@@ -571,7 +621,7 @@ def write_journal():
 
 # Backup & export
 def render_backup_page(error=None, status=200):
-    connection = sqlite3.connect(app.config["DATABASE"])
+    connection = connect(app.config["DATABASE"])
     try:
         total, oldest, newest = connection.execute(
             "SELECT COUNT(*), MIN(created_at), MAX(created_at) FROM entries"
@@ -595,11 +645,13 @@ def render_backup_page(error=None, status=200):
 
 
 def all_entries_newest_first():
+    """Every entry, newest first, plus {entry_id: [tag names]}."""
     connection = get_connection()
     try:
-        return connection.execute(
+        rows = connection.execute(
             "SELECT * FROM entries ORDER BY created_at DESC, id DESC"
         ).fetchall()
+        return rows, get_tags_for_entries(connection, [row["id"] for row in rows])
     finally:
         connection.close()
 
@@ -622,7 +674,7 @@ def backup_page():
 @app.route("/backup/export.md")
 def export_markdown():
     now = datetime.now()
-    text = entries_to_markdown(all_entries_newest_first(), now)
+    text = entries_to_markdown(*all_entries_newest_first(), now)
     return download_response(text.encode("utf-8"), "md",
                              "text/markdown", now)
 
@@ -630,7 +682,7 @@ def export_markdown():
 @app.route("/backup/export.json")
 def export_json():
     now = datetime.now()
-    text = entries_to_json(all_entries_newest_first(), now)
+    text = entries_to_json(*all_entries_newest_first(), now)
     return download_response(text.encode("utf-8"), "json",
                              "application/json", now)
 
@@ -656,7 +708,7 @@ def restore_backup():
     except RestoreError as error:
         return render_backup_page(str(error), 400)
 
-    connection = sqlite3.connect(app.config["DATABASE"])
+    connection = connect(app.config["DATABASE"])
     try:
         added, skipped = restore_entries(connection, entries)
     finally:

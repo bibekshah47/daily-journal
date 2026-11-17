@@ -37,6 +37,8 @@
 
     {{ ui.mood_picker(entry['mood'], "How were you feeling?") }}
 
+    {{ ui.tag_field(entry['tags'], tag_suggestions) }}
+
     {{ ui.editor_fields(entry['content'], entry.get('content_html'), "Write your thoughts here…") }}
 
     {{ ui.reflection_fields(entry['went_well'], entry['went_wrong'], entry['improve_tomorrow']) }}
@@ -59,6 +61,7 @@
 
 {% block scripts %}
 {{ ui.mood_picker_script() }}
+{{ ui.tag_field_script() }}
 <script>
     const form = document.getElementById("edit-form");
     const journalTextarea = document.getElementById("journal");

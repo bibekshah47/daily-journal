@@ -31,6 +31,8 @@
 
     {{ ui.mood_picker(mood) }}
 
+    {{ ui.tag_field(tags, tag_suggestions) }}
+
     {{ ui.editor_fields(content, content_html, prompt) }}
 
     {{ ui.reflection_fields(went_well, went_wrong, improve_tomorrow) }}
@@ -63,6 +65,7 @@
 
         const titleInput = document.getElementById("title");
         const moodSelect = document.getElementById("mood");
+        const tagsInput = document.getElementById("tags");
         const journalTextarea = document.getElementById("journal");
         const wordCount = document.getElementById("word-count");
         const writeForm = document.getElementById("write-form");
@@ -86,6 +89,7 @@
             return {
                 title: titleInput.value,
                 mood: moodSelect.value,
+                tags: tagsInput.value,
                 content: journalTextarea.value,
                 ...Object.fromEntries(reflectionInputs.map(input => [input.name, input.value])),
                 version: 2,
@@ -114,6 +118,7 @@
                 if (
                     !draft.title.trim() &&
                     !draft.mood &&
+                    !draft.tags.trim() &&
                     !draft.content.trim() &&
                     reflectionInputs.every(input => !input.value.trim())
                 ) {
@@ -160,6 +165,7 @@
                 const serverHasContent =
                     titleInput.value.trim() ||
                     moodSelect.value ||
+                    tagsInput.value.trim() ||
                     journalTextarea.value.trim() ||
                     reflectionInputs.some(input => input.value.trim());
 
@@ -169,6 +175,8 @@
 
                 titleInput.value = draft.title || "";
                 moodSelect.value = draft.mood || "";
+                tagsInput.value = typeof draft.tags === "string" ? draft.tags : "";
+                tagsInput.dispatchEvent(new Event("tags-sync"));
                 journalTextarea.value = draft.content || "";
 
                 reflectionInputs.forEach(input => {
@@ -209,9 +217,10 @@
             }
 
             writeForm.reset();
-            [titleInput, moodSelect, journalTextarea, ...reflectionInputs]
+            [titleInput, moodSelect, tagsInput, journalTextarea, ...reflectionInputs]
                 .forEach(input => { input.value = ""; });
             moodSelect.dispatchEvent(new Event("mood-sync"));
+            tagsInput.dispatchEvent(new Event("tags-sync"));
             if (window.journalEditor) window.journalEditor.clear();
             updateWordCount();
             discardButton.hidden = true;
@@ -225,6 +234,7 @@
         // Watch all journal fields for changes.
         titleInput.addEventListener("input", scheduleAutosave);
         moodSelect.addEventListener("change", scheduleAutosave);
+        tagsInput.addEventListener("change", scheduleAutosave);
         journalTextarea.addEventListener("input", function () {
             updateWordCount();
             scheduleAutosave();
@@ -259,6 +269,7 @@
         updateWordCount();
 </script>
 {{ ui.mood_picker_script() }}
+{{ ui.tag_field_script() }}
 <script>
     // Show today's date in the header, using this computer's clock.
     document.getElementById("compose-date").textContent =

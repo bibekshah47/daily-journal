@@ -98,3 +98,177 @@
     <template id="initial-journal-html">{% if content_html %}{{ content_html | journal_html }}{% endif %}</template>
 </div>
 {% endmacro %}
+
+
+{# Tags shown as small grey pills. linked=true makes each one a History filter link. #}
+{% macro tag_pills(tags, linked=false, class="") %}
+{% if tags %}
+<ul class="tag-list {{ class }}" aria-label="Tags">
+    {% for name in tags %}
+    <li>
+        {% if linked %}
+        <a class="tag-pill" href="{{ url_for('history', tag=name) }}"><span aria-hidden="true">#</span>{{ name }}</a>
+        {% else %}
+        <span class="tag-pill"><span aria-hidden="true">#</span>{{ name }}</span>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+{% endmacro %}
+
+
+{# Tag chips. Like the mood picker, a hidden input named "tags" holds the real
+   value (comma-separated), so the server and the draft autosave just see text. #}
+{% macro tag_field(current, suggestions) %}
+<div class="tag-field">
+    <label for="tag-input" class="tag-field-label">Tags</label>
+    <input type="hidden" id="tags" name="tags" value="{{ (current or []) | join(', ') }}">
+    <div class="tag-box">
+        <ul class="tag-chips" id="tag-chips" aria-label="Added tags"></ul>
+        <input type="text" id="tag-input" class="tag-text" list="tag-suggestions"
+               placeholder="Add a tag" autocomplete="off" autocapitalize="none"
+               spellcheck="false" enterkeyhint="enter" aria-describedby="tag-hint">
+    </div>
+    <datalist id="tag-suggestions">
+        {% for name in suggestions or [] %}<option value="{{ name }}"></option>{% endfor %}
+    </datalist>
+    <p class="field-hint" id="tag-hint" aria-live="polite">Press Enter to add. Up to 5.</p>
+</div>
+{% endmacro %}
+
+
+{# Script for the tag chips. The rules match tags.py on the server, which
+   applies them again, so this is only for showing chips as you type. #}
+{% macro tag_field_script() %}
+<script>
+    (function () {
+        const MAX_TAGS = 5;
+        const MAX_LENGTH = 30;
+        const HINT = "Press Enter to add. Up to 5.";
+        const hidden = document.getElementById("tags");
+        const input = document.getElementById("tag-input");
+        const list = document.getElementById("tag-chips");
+        const hint = document.getElementById("tag-hint");
+        const suggestions = document.getElementById("tag-suggestions");
+        if (!hidden || !input || !list) return;
+
+        let tags = [];
+
+        function normalize(text) {
+            return String(text || "").trim().replace(/^#+/, "").trim().toLowerCase()
+                .replace(/\s+/g, "-")
+                .replace(/[^\p{L}\p{N}_-]/gu, "")
+                .slice(0, MAX_LENGTH);
+        }
+
+        function parse(text) {
+            const result = [];
+            String(text || "").split(",").forEach(function (part) {
+                const tag = normalize(part);
+                if (tag && !result.includes(tag) && result.length < MAX_TAGS) result.push(tag);
+            });
+            return result;
+        }
+
+        function render() {
+            list.replaceChildren(...tags.map(function (tag) {
+                const item = document.createElement("li");
+                item.className = "tag-chip";
+                const name = document.createElement("span");
+                name.textContent = "#" + tag;
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.className = "tag-chip-remove";
+                remove.setAttribute("aria-label", "Remove tag " + tag);
+                remove.textContent = "×";
+                remove.addEventListener("click", function () {
+                    tags = tags.filter(function (other) { return other !== tag; });
+                    update();
+                    input.focus();
+                });
+                item.append(name, remove);
+                return item;
+            }));
+            list.hidden = tags.length === 0;
+            hint.textContent = tags.length >= MAX_TAGS
+                ? "That's 5 tags, the most an entry can have."
+                : HINT;
+        }
+
+        // Write the chips back to the hidden field and let the page know.
+        function update() {
+            hidden.value = tags.join(", ");
+            render();
+            hidden.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+
+        // Add tags from text; returns true if anything changed.
+        function add(text) {
+            const before = tags.length;
+            parse(text).forEach(function (tag) {
+                if (!tags.includes(tag) && tags.length < MAX_TAGS) tags.push(tag);
+            });
+            if (tags.length !== before) update();
+            else render();
+            return tags.length !== before;
+        }
+
+        input.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                // Never submit the whole form from the tag box.
+                event.preventDefault();
+                add(input.value);
+                input.value = "";
+            } else if (event.key === "Backspace" && input.value === "" && tags.length) {
+                event.preventDefault();
+                tags.pop();
+                update();
+            }
+        });
+
+        input.addEventListener("input", function (event) {
+            // A comma (typed or pasted) finishes every tag before it.
+            if (input.value.includes(",")) {
+                const parts = input.value.split(",");
+                const rest = parts.pop();
+                add(parts.join(","));
+                input.value = rest.trimStart();
+                return;
+            }
+            // Picking a suggestion from the list adds it straight away.
+            const picked = !event.inputType || event.inputType === "insertReplacementText";
+            if (picked && suggestions &&
+                Array.from(suggestions.options).some(function (option) { return option.value === input.value; })) {
+                add(input.value);
+                input.value = "";
+            }
+        });
+
+        // Don't lose a tag that was typed but not yet turned into a chip.
+        if (hidden.form) {
+            hidden.form.addEventListener("submit", function () {
+                if (input.value.trim()) {
+                    add(input.value);
+                    input.value = "";
+                }
+            }, true);
+        }
+
+        // Clicking anywhere in the box (but not on a chip) focuses the text box.
+        input.parentElement.addEventListener("click", function (event) {
+            if (event.target === input.parentElement) input.focus();
+        });
+
+        // Draft restore and "Discard draft" change the hidden value directly.
+        hidden.addEventListener("tags-sync", function () {
+            tags = parse(hidden.value);
+            input.value = "";
+            render();
+        });
+
+        tags = parse(hidden.value);
+        render();
+    })();
+</script>
+{% endmacro %}

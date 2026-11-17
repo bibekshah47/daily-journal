@@ -9,9 +9,12 @@ import tempfile
 
 from journal_insights import REFLECTION_QUESTIONS
 from rich_text import clean_html
+from tags import normalize_tags, set_entry_tags
 
 EXPORT_APP = "my-journal"
-EXPORT_VERSION = 1
+EXPORT_VERSION = 2   # 2 added "tags" to each entry
+# Version 1 files (no tags) are still accepted.
+RESTORABLE_VERSIONS = (1, 2)
 KEEP_DAILY_BACKUPS = 14
 BACKUP_NAME = re.compile(r"^journal-(\d{4}-\d{2}-\d{2})\.db$")
 
@@ -119,8 +122,11 @@ def _entry_moment(created_at):
     return _friendly(moment, "%B %d, %Y"), when
 
 
-def entries_to_markdown(rows, exported_at):
-    """One Markdown document, newest entry first, entries separated by ---."""
+def entries_to_markdown(rows, tags_by_id, exported_at):
+    """One Markdown document, newest entry first, entries separated by ---.
+
+    tags_by_id maps entry id -> list of tag names.
+    """
     count = len(rows)
     parts = [
         "# My Journal\n\n"
@@ -133,6 +139,9 @@ def entries_to_markdown(rows, exported_at):
         lines = [f"## {title}", "", when]
         if (row["mood"] or "").strip():
             lines.append(f"Mood: {row['mood'].strip()}")
+        tags = tags_by_id.get(row["id"])
+        if tags:
+            lines.append(f"Tags: {', '.join(tags)}")
         lines += ["", (row["content"] or "").strip()]
         answers = [(question, (row[field] or "").strip())
                    for field, question in REFLECTION_QUESTIONS]
@@ -145,12 +154,12 @@ def entries_to_markdown(rows, exported_at):
     return "\n---\n\n".join(parts)
 
 
-def entries_to_json(rows, exported_at):
+def entries_to_json(rows, tags_by_id, exported_at):
     payload = {
         "app": EXPORT_APP,
         "version": EXPORT_VERSION,
         "exported_at": exported_at.isoformat(timespec="seconds"),
-        "entries": [dict(row) for row in rows],
+        "entries": [dict(row, tags=tags_by_id.get(row["id"], [])) for row in rows],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
@@ -178,10 +187,12 @@ def parse_backup(raw_bytes):
             or "entries" not in payload):
         raise RestoreError("That JSON file isn't a My Journal backup. Choose a "
                            "file made with “Download .json” on this page.")
-    if payload.get("version") != EXPORT_VERSION:
-        raise RestoreError(f"This backup uses format version "
-                           f"{payload.get('version')!r}, but this app can only "
-                           f"restore version {EXPORT_VERSION}.")
+    version = payload.get("version")
+    # bool is an int in Python: don't let `true` pass as version 1.
+    if isinstance(version, bool) or version not in RESTORABLE_VERSIONS:
+        raise RestoreError(f"This backup uses format version {version!r}, but "
+                           f"this app can only restore versions "
+                           f"{RESTORABLE_VERSIONS[0]} to {RESTORABLE_VERSIONS[-1]}.")
     if not isinstance(payload["entries"], list):
         raise RestoreError("The backup's list of entries is damaged.")
 
@@ -201,6 +212,12 @@ def parse_backup(raw_bytes):
         entry["is_favorite"] = 1 if favorite else 0
         if entry["content_html"] is not None:
             entry["content_html"] = clean_html(entry["content_html"])
+        tags = item.get("tags") if version >= 2 else None
+        if tags is None:
+            tags = []
+        if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
+            raise RestoreError(f"Entry {number} has an invalid list of tags.")
+        entry["tags"] = normalize_tags(tags)
         entries.append(entry)
     return entries
 
@@ -209,7 +226,8 @@ def restore_entries(connection, entries):
     """Insert entries that aren't already present. Returns (added, skipped).
 
     An entry is a duplicate when both created_at and content match an existing
-    entry (or an earlier entry in the same file). Nothing is updated or deleted.
+    entry (or an earlier entry in the same file). Nothing is updated or deleted,
+    so tags are only applied to newly added entries.
     """
     columns = TEXT_COLUMNS + ("is_favorite",)
     placeholders = ", ".join("?" for _ in columns)
@@ -224,10 +242,12 @@ def restore_entries(connection, entries):
             if key in seen:
                 skipped += 1
                 continue
-            connection.execute(
+            cursor = connection.execute(
                 f"INSERT INTO entries ({', '.join(columns)}) VALUES ({placeholders})",
                 tuple(entry[column] for column in columns),
             )
+            if entry.get("tags"):
+                set_entry_tags(connection, cursor.lastrowid, entry["tags"])
             seen.add(key)
             added += 1
     return added, skipped

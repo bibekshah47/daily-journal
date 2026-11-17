@@ -118,7 +118,8 @@ class BackupTests(unittest.TestCase):
         self.assertTrue(response.headers['Content-Disposition'].startswith('attachment'))
         payload = response.get_json()
         self.assertEqual(payload['app'], 'my-journal')
-        self.assertEqual(payload['version'], 1)
+        self.assertEqual(payload['version'], backup.EXPORT_VERSION)
+        self.assertEqual(backup.EXPORT_VERSION, 2)
         self.assertIn('exported_at', payload)
         self.assertEqual(len(payload['entries']), 3)
         self.assertEqual(payload['entries'][0]['title'], 'Late night')
@@ -126,7 +127,7 @@ class BackupTests(unittest.TestCase):
         columns = {row[1] for row in db.execute('PRAGMA table_info(entries)')}
         db.close()
         for entry in payload['entries']:
-            self.assertEqual(set(entry), columns)
+            self.assertEqual(set(entry), columns | {'tags'})
 
     def test_database_export_is_an_exact_copy(self):
         response = self.client.get('/backup/export.db')
@@ -182,8 +183,11 @@ class BackupTests(unittest.TestCase):
             (b'{"app": "my-journal"', 'backup.json', "isn't valid JSON"),
             (b'{"app": "other-app", "version": 1, "entries": []}', 'backup.json',
              "isn't a My Journal backup"),
-            (b'{"app": "my-journal", "version": 2, "entries": []}', 'backup.json',
-             'can only restore version 1'),
+            (b'{"app": "my-journal", "version": 3, "entries": []}', 'backup.json',
+             'can only restore versions 1 to 2'),
+            (b'{"app": "my-journal", "version": 2, "entries": [{"content": "x", '
+             b'"created_at": "2026-11-10T10:00:00", "tags": "work"}]}',
+             'backup.json', 'Entry 1 has an invalid list of tags'),
             (b'{"app": "my-journal", "version": 1, "entries": [{"content": "x"}]}',
              'backup.json', 'Entry 1 is missing its text or date'),
             (b'# My Journal', 'export.md', 'Only .json backups can be restored'),

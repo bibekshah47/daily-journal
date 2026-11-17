@@ -40,6 +40,7 @@
         </p>
         <h1 class="reading-title">{{ entry["title"] or 'Untitled' }}</h1>
         {{ ui.mood_badge(entry["mood"]) }}
+        {{ ui.tag_pills(entry["tags"], linked=true, class="reading-tags") }}
     </header>
 
     {% if entry.get('content_html') %}
