@@ -3,6 +3,9 @@ from datetime import date, datetime, timedelta
 
 from flask import (Blueprint, abort, flash, redirect, render_template, request,
                    url_for)
+from flask_login import current_user
+
+from accounts import first_name
 
 from db import get_db
 from journal_insights import get_journal_stats
@@ -104,6 +107,7 @@ def home():
     return render_template(
         "index.html",
         greeting=greeting,
+        greeting_name=first_name(current_user.display_name),
         today=today,
         total_entries=stats["total_entries"],
         monthly_entries=stats["monthly_entries"],

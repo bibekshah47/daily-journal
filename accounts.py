@@ -12,9 +12,11 @@ from werkzeug.security import check_password_hash, generate_password_hash
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 128
 MAX_EMAIL_LENGTH = 254
+MAX_DISPLAY_NAME_LENGTH = 40
 
 # Deliberately simple: something@something.something, no spaces.
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_SPACES = re.compile(r"\s+")
 
 # Checked when an email isn't found, so a wrong email takes as long as a
 # wrong password and response times don't reveal which accounts exist.
@@ -27,6 +29,28 @@ class EmailTaken(ValueError):
 
 def normalize_email(email):
     return str(email or "").strip().lower()
+
+
+def normalize_display_name(name):
+    """Trimmed, with runs of spaces or line breaks made one space. "" -> None."""
+    name = _SPACES.sub(" ", str(name or "")).strip()
+    return name or None
+
+
+def first_name(display_name):
+    """The first word of a display name, for the greeting: "Bibek Shah" -> "Bibek".
+
+    None for a missing or blank name.
+    """
+    words = str(display_name or "").split()
+    return words[0] if words else None
+
+
+def display_name_error(name):
+    """None, or the message to show next to the name field (name already normalized)."""
+    if name and len(name) > MAX_DISPLAY_NAME_LENGTH:
+        return f"Use {MAX_DISPLAY_NAME_LENGTH} characters or fewer"
+    return None
 
 
 def email_error(email):
@@ -45,24 +69,25 @@ def password_error(password):
     return None
 
 
-def create_user(connection, email, password, now=None):
-    """Insert a user (email already normalized and checked). Returns the new id.
+def create_user(connection, email, password, display_name=None, now=None):
+    """Insert a user (email and name already normalized and checked). Returns the new id.
 
     Raises EmailTaken if the email is in use. Does not commit.
     """
     try:
         cursor = connection.execute(
-            "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-            (email, generate_password_hash(password), (now or datetime.now()).isoformat()))
+            "INSERT INTO users (email, password_hash, created_at, display_name) VALUES (?, ?, ?, ?)",
+            (email, generate_password_hash(password), (now or datetime.now()).isoformat(),
+             display_name))
     except sqlite3.IntegrityError as error:
         raise EmailTaken(email) from error
     return cursor.lastrowid
 
 
 def find_user(connection, user_id):
-    """(id, email) for a user id, or None."""
+    """(id, email, display_name) for a user id, or None."""
     return connection.execute(
-        "SELECT id, email FROM users WHERE id = ?", (user_id,)).fetchone()
+        "SELECT id, email, display_name FROM users WHERE id = ?", (user_id,)).fetchone()
 
 
 def find_user_by_email(connection, email):
@@ -71,12 +96,12 @@ def find_user_by_email(connection, email):
 
 
 def authenticate(connection, email, password):
-    """(id, email) if the email and password match an account, else None."""
+    """(id, email, display_name) if the email and password match an account, else None."""
     global _dummy_hash
     if len(password) > MAX_PASSWORD_LENGTH:
         return None   # never spend time hashing absurdly long input
     row = connection.execute(
-        "SELECT id, email, password_hash FROM users WHERE email = ?",
+        "SELECT id, email, password_hash, display_name FROM users WHERE email = ?",
         (normalize_email(email),)).fetchone()
     if row is None:
         if _dummy_hash is None:
@@ -85,7 +110,7 @@ def authenticate(connection, email, password):
         return None
     if not check_password_hash(row[2], password):
         return None
-    return row[0], row[1]
+    return row[0], row[1], row[3]
 
 
 def assign_unowned(connection, user_id):

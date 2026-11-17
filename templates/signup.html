@@ -10,13 +10,26 @@
     <h1 id="auth-heading">Create an account</h1>
 
     <form method="POST" action="{{ url_for('auth.signup') }}" class="auth-form" novalidate>
+        <div class="auth-field">
+            <label for="display_name">What should we call you?</label>
+            <input type="text" id="display_name" name="display_name" value="{{ display_name }}"
+                   autocomplete="given-name" maxlength="40"
+                   {% if errors.get('display_name') %}aria-invalid="true" aria-describedby="display-name-error"{% else %}aria-describedby="display-name-hint"{% endif %}
+                   {% if not errors or errors.get('display_name') %}autofocus{% endif %}>
+            {% if errors.get('display_name') %}
+            <p class="field-error" id="display-name-error"><i data-lucide="circle-alert" aria-hidden="true"></i>{{ errors.display_name }}</p>
+            {% else %}
+            <p class="field-hint" id="display-name-hint">Optional. Your first name or a nickname.</p>
+            {% endif %}
+        </div>
+
         {% set email_problem = errors.get('email') or errors.get('email_taken') %}
         <div class="auth-field">
             <label for="email">Email</label>
             <input type="email" id="email" name="email" value="{{ email }}" required
                    autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254"
                    {% if email_problem %}aria-invalid="true" aria-describedby="email-error"{% endif %}
-                   {% if not errors or email_problem %}autofocus{% endif %}>
+                   {% if email_problem and not errors.get('display_name') %}autofocus{% endif %}>
             {% if errors.get('email') %}
             <p class="field-error" id="email-error"><i data-lucide="circle-alert" aria-hidden="true"></i>{{ errors.email }}</p>
             {% elif errors.get('email_taken') %}
@@ -37,5 +50,5 @@
 
 {% block scripts %}
 {{ ui.password_toggle_script() }}
-{% if errors.get('password') and not (errors.get('email') or errors.get('email_taken')) %}<script>document.getElementById("password").focus();</script>{% endif %}
+{% if errors.get('password') and not (errors.get('display_name') or errors.get('email') or errors.get('email_taken')) %}<script>document.getElementById("password").focus();</script>{% endif %}
 {% endblock %}

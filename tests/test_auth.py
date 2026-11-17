@@ -10,6 +10,7 @@ import re
 import sqlite3
 import tempfile
 import unittest
+from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
 from database import connect, initialize_database
@@ -201,6 +202,158 @@ class LoginTests(AuthTestCase):
         db.commit()
         db.close()
         self.assertEqual(self.client.get('/').status_code, 302)
+
+
+class DisplayNameTests(AuthTestCase):
+    def at_hour(self, hour):
+        """Pin the clock Home uses to pick the greeting."""
+        real = importlib.import_module('views.entries').datetime
+
+        class Clock(real):
+            @classmethod
+            def now(cls, tz=None):
+                return real(2026, 11, 17, hour, 30)
+        patcher = mock.patch('views.entries.datetime', Clock)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def h1(self, client=None):
+        page = (client or self.client).get('/').text
+        return re.search(r'<h1>(.*?)</h1>', page).group(1)
+
+    def stored_name(self, email):
+        return self.query('SELECT display_name FROM users WHERE email = ?', email)[0][0]
+
+    def test_signup_page_asks_first(self):
+        page = self.client.get('/signup').text
+        self.assertIn('What should we call you?', page)
+        self.assertIn('Optional. Your first name or a nickname.', page)
+        self.assertIn('autocomplete="given-name"', page)
+        self.assertIn('maxlength="40"', page)
+        self.assertLess(page.index('name="display_name"'), page.index('name="email"'))
+
+    def test_signup_with_a_name(self):
+        self.at_hour(19)
+        response = self.client.post('/signup', data={
+            'display_name': '  Bibek \n  Shah ', 'email': 'b@example.com', 'password': 'a-good-password'})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.stored_name('b@example.com'), 'Bibek Shah')   # trimmed, spaces tidied
+        self.assertEqual(self.h1(), 'Good evening, Bibek.')             # first word only
+        page = self.client.get('/').text
+        self.assertNotIn('welcome back', page)
+        self.assertIn('<span class="sidebar-name" title="Bibek Shah">Bibek Shah</span>', page)
+        self.assertLess(page.index('class="sidebar-name"'), page.index('class="sidebar-email"'))
+        # Logging in again (not just signing up) brings the name back too.
+        self.client.post('/logout')
+        self.login('b@example.com')
+        self.assertEqual(self.h1(), 'Good evening, Bibek.')
+
+    def test_signup_without_a_name(self):
+        self.at_hour(19)
+        for i, name in enumerate([None, '', '   \n  ']):
+            with self.subTest(name=name):
+                client = self.app.test_client()
+                data = {'email': f'n{i}@example.com', 'password': 'a-good-password'}
+                if name is not None:
+                    data['display_name'] = name
+                self.assertEqual(client.post('/signup', data=data).status_code, 302)
+                self.assertIsNone(self.stored_name(f'n{i}@example.com'))      # empty becomes NULL
+                self.assertEqual(self.h1(client), 'Good evening.')
+                self.assertNotIn('class="sidebar-name"', client.get('/').text)
+
+    def test_greeting_by_time_of_day(self):
+        user_id = add_user(self.path, 'b@example.com', display_name='Bibek')
+        log_in_as(self.client, user_id)
+        unnamed = self.app.test_client()
+        log_in_as(unnamed, add_user(self.path, 'x@example.com'))
+        for hour, greeting in [(6, 'Good morning'), (11, 'Good morning'), (12, 'Good afternoon'),
+                               (16, 'Good afternoon'), (17, 'Good evening'), (23, 'Good evening')]:
+            with self.subTest(hour=hour):
+                self.at_hour(hour)
+                self.assertEqual(self.h1(), f'{greeting}, Bibek.')
+                self.assertEqual(self.h1(unnamed), f'{greeting}.')
+
+    def test_greeting_uses_the_first_word_and_sidebar_the_full_name(self):
+        self.at_hour(14)
+        # Stored straight in the database, so first_name() has to cope with
+        # names the signup form would have tidied up.
+        cases = [('Bibek Shah', 'Good afternoon, Bibek.'),
+                 ('  Bibek  ', 'Good afternoon, Bibek.'),
+                 ('Bibek\tKumar  Shah', 'Good afternoon, Bibek.'),
+                 ('   ', 'Good afternoon.'),
+                 ('', 'Good afternoon.'),
+                 (None, 'Good afternoon.')]
+        for i, (stored, expected) in enumerate(cases):
+            with self.subTest(stored=stored):
+                client = self.app.test_client()
+                log_in_as(client, add_user(self.path, f'g{i}@example.com', display_name=stored))
+                self.assertEqual(self.h1(client), expected)
+                page = client.get('/').text
+                if stored == 'Bibek Shah':
+                    self.assertIn('<span class="sidebar-name" title="Bibek Shah">Bibek Shah</span>', page)
+
+    def test_first_name_helper(self):
+        from accounts import first_name
+        self.assertEqual(first_name('Bibek Shah'), 'Bibek')
+        self.assertEqual(first_name('  Bibek  '), 'Bibek')
+        self.assertEqual(first_name('Bibek\n Shah'), 'Bibek')
+        for blank in (None, '', '   ', '\t\n'):
+            self.assertIsNone(first_name(blank))
+
+    def test_forty_character_limit(self):
+        forty = 'x' * 40
+        self.assertEqual(self.client.post('/signup', data={
+            'display_name': forty, 'email': 'ok@example.com', 'password': 'a-good-password'}).status_code, 302)
+        self.assertEqual(self.stored_name('ok@example.com'), forty)
+        other = self.app.test_client()
+        response = other.post('/signup', data={
+            'display_name': 'y' * 41, 'email': 'long@example.com', 'password': 'a-good-password'})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Use 40 characters or fewer', response.text)
+        self.assertIn('aria-describedby="display-name-error"', response.text)
+        self.assertIn('value="long@example.com"', response.text)    # the rest is kept
+        self.assertNotIn('a-good-password', response.text)
+        self.assertEqual(self.query("SELECT COUNT(*) FROM users WHERE email = 'long@example.com'")[0][0], 0)
+        # 40 after trimming is fine.
+        self.assertEqual(other.post('/signup', data={
+            'display_name': '   ' + forty + '   ', 'email': 'trim@example.com',
+            'password': 'a-good-password'}).status_code, 302)
+
+    def test_a_name_with_html_is_shown_escaped(self):
+        self.at_hour(9)
+        name = '<script>alert(1)</script>'
+        escaped = '&lt;script&gt;alert(1)&lt;/script&gt;'
+        response = self.client.post('/signup', data={
+            'display_name': name, 'email': 'h@example.com', 'password': 'a-good-password'})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.stored_name('h@example.com'), name)        # stored as typed
+        page = self.client.get('/').text
+        self.assertNotIn('<script>alert(1)', page)
+        self.assertIn(f'<h1>Good morning, {escaped}.</h1>', page)
+        self.assertIn(f'title="{escaped}">{escaped}</span>', page)       # sidebar
+        # Re-shown in the form after an error, still escaped.
+        error_page = self.app.test_client().post('/signup', data={
+            'display_name': '"><script>alert(2)</script>', 'email': 'bad', 'password': 'a-good-password'}).text
+        self.assertNotIn('<script>alert(2)', error_page)
+        self.assertIn('value="&#34;&gt;&lt;script&gt;alert(2)&lt;/script&gt;"', error_page)
+
+    def test_existing_users_keep_working_with_no_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / 'old.db')
+            db = sqlite3.connect(path)
+            db.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, '
+                       'password_hash TEXT NOT NULL, created_at TEXT NOT NULL)')
+            db.execute("INSERT INTO users VALUES (5, 'old@example.com', 'hash', '2026-11-01')")
+            db.commit()
+            db.close()
+            initialize_database(path)
+            initialize_database(path)
+            db = connect(path)
+            try:
+                self.assertEqual(db.execute('SELECT id, email, display_name FROM users').fetchall(),
+                                 [(5, 'old@example.com', None)])
+            finally:
+                db.close()
 
 
 class LoggedOutTests(AuthTestCase):

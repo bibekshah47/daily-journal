@@ -44,6 +44,9 @@
             <span>Backup &amp; export</span>
         </a>
         <div class="sidebar-account">
+            {% if current_user.display_name %}
+            <span class="sidebar-name" title="{{ current_user.display_name }}">{{ current_user.display_name }}</span>
+            {% endif %}
             <span class="sidebar-email" title="{{ current_user.email }}">{{ current_user.email }}</span>
             <form method="POST" action="{{ url_for('auth.logout') }}">
                 <button type="submit" class="text-button sidebar-logout">Log out</button>

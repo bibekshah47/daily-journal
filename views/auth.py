@@ -4,8 +4,9 @@ from flask import (Blueprint, flash, redirect, render_template, request,
 from flask_login import (LoginManager, UserMixin, current_user, login_user,
                          logout_user)
 
-from accounts import (EmailTaken, authenticate, create_user, email_error,
-                      find_user, normalize_email, password_error)
+from accounts import (EmailTaken, authenticate, create_user, display_name_error,
+                      email_error, find_user, normalize_display_name,
+                      normalize_email, password_error)
 from db import get_db
 from views.shared import safe_path
 
@@ -19,9 +20,11 @@ PUBLIC_ENDPOINTS = {"auth.login", "auth.signup", "auth.logout", "static"}
 
 
 class User(UserMixin):
-    def __init__(self, user_id, email):
+    def __init__(self, user_id, email, display_name=None):
         self.id = user_id
         self.email = email
+        # Plain text from the user: templates show it autoescaped, never |safe.
+        self.display_name = display_name
 
 
 @login_manager.user_loader
@@ -30,7 +33,7 @@ def load_user(user_id):
         row = find_user(get_db(), int(user_id))
     except (TypeError, ValueError):
         return None
-    return User(row[0], row[1]) if row else None
+    return User(row[0], row[1], row[2]) if row else None
 
 
 def login_redirect():
@@ -71,26 +74,30 @@ def signup():
         return redirect(url_for("entries.home"))
 
     email = ""
+    display_name = None
     errors = {}
     if request.method == "POST":
+        display_name = normalize_display_name(request.form.get("display_name"))
         email = normalize_email(request.form.get("email"))
         password = request.form.get("password", "")
-        errors = {"email": email_error(email), "password": password_error(password)}
+        errors = {"display_name": display_name_error(display_name),
+                  "email": email_error(email), "password": password_error(password)}
         errors = {field: message for field, message in errors.items() if message}
         if not errors:
             connection = get_db()
             try:
-                new_id = create_user(connection, email, password)
+                new_id = create_user(connection, email, password, display_name)
                 connection.commit()
             except EmailTaken:
                 connection.rollback()
                 errors["email_taken"] = True
             else:
-                login_user(User(new_id, email))
+                login_user(User(new_id, email, display_name))
                 flash("Welcome! Your journal is ready.")
                 return redirect(url_for("entries.home"))
 
-    return render_template("signup.html", email=email, errors=errors), 400 if errors else 200
+    return render_template("signup.html", email=email, display_name=display_name or "",
+                           errors=errors), 400 if errors else 200
 
 
 @bp.route("/login", methods=["GET", "POST"])

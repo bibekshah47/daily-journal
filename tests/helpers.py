@@ -13,15 +13,15 @@ TEST_PASSWORD = 'correct-horse-battery'
 _hashes = {}
 
 
-def add_user(path, email=TEST_EMAIL, password=TEST_PASSWORD):
+def add_user(path, email=TEST_EMAIL, password=TEST_PASSWORD, display_name=None):
     """Insert a user straight into the database at `path`. Returns its id."""
     if password not in _hashes:
         _hashes[password] = generate_password_hash(password, method='pbkdf2:sha256:1000')
     db = connect(path)
     try:
         cursor = db.execute(
-            'INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)',
-            (email, _hashes[password], datetime.now().isoformat()))
+            'INSERT INTO users (email, password_hash, created_at, display_name) VALUES (?, ?, ?, ?)',
+            (email, _hashes[password], datetime.now().isoformat(), display_name))
         db.commit()
         return cursor.lastrowid
     finally:

@@ -12,7 +12,7 @@
         <button type="submit" class="text-button">Log out</button>
     </form>
     <p class="page-kicker">{{ today | friendly_date(true) }}</p>
-    <h1>{{ greeting }}, welcome back.</h1>
+    <h1>{{ greeting }}{% if greeting_name %}, {{ greeting_name }}{% endif %}.</h1>
 </header>
 
 <!-- TODAY: the one thing this page is for -->

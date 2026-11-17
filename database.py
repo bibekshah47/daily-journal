@@ -77,6 +77,9 @@ def initialize_database(database_path="journal.db"):
                     created_at TEXT NOT NULL
                 )
             """)
+            # Optional name for the greeting; NULL for existing and unnamed users.
+            if "display_name" not in _columns(connection, "users"):
+                connection.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS entries (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
