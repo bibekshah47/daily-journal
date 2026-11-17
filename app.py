@@ -20,11 +20,12 @@ from backup import (RestoreError, database_bytes, entries_to_json,
                     parse_backup, restore_entries, restore_message,
                     run_daily_backup)
 from rich_text import prepare_content, safe_journal_html
-from journal_insights import get_journal_stats
+from journal_insights import REFLECTION_QUESTIONS, get_journal_stats
 from memories import get_memories
 from tags import (all_tags_with_counts, get_tags_for_entries, normalize_tag,
                   parse_tags, set_entry_tags)
 from trash import TRASH_DAYS, cleanup_trash, empty_trash, purge_entry
+from weekly import get_week_review, week_bounds, week_label
 
 
 # Create the Flask application
@@ -322,6 +323,39 @@ def insights():
     most_entries = max([mood["count"] for mood in mood_breakdown] + [1])
     return render_template("insights.html", mood_breakdown=mood_breakdown,
                            most_mood_entries=most_entries, **stats)
+
+
+@app.route("/week")
+def week():
+    """Weekly review. ?start=YYYY-MM-DD snaps to its Sunday; anything else shows this week."""
+    this_week, _ = week_bounds(date.today())
+    try:
+        start, _ = week_bounds(date.fromisoformat(request.args.get("start", "").strip()))
+        if start > this_week:
+            raise ValueError("future week")
+        previous_start = start - timedelta(days=7)
+    except (ValueError, OverflowError):  # OverflowError: weeks before year 1
+        start = this_week
+        previous_start = start - timedelta(days=7)
+
+    connection = connect(app.config["DATABASE"])
+    try:
+        review = get_week_review(connection, start)
+    finally:
+        connection.close()
+
+    # No arrow into the future (and no date overflow near year 9999).
+    next_start = start + timedelta(days=7) if start < this_week else None
+    return render_template(
+        "week.html",
+        review=review,
+        week_label=week_label(start),
+        today=date.today(),
+        questions=REFLECTION_QUESTIONS,
+        previous_start=previous_start.isoformat(),
+        next_start=next_start.isoformat() if next_start else None,
+        is_this_week=start == this_week,
+    )
 
 
 # Move an entry to Trash. It keeps its tags and can be restored for 30 days.

@@ -8,6 +8,9 @@
 <header class="page-header">
     <h1>Insights</h1>
     <p class="page-subtitle">How often you write, how you've been feeling, and which questions you come back to.</p>
+    <a href="{{ url_for('week') }}" class="text-link week-review-link">
+        <i data-lucide="calendar-range" aria-hidden="true"></i> Review this week
+    </a>
 </header>
 
 {% if not total_entries %}
