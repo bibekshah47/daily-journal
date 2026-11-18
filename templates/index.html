@@ -7,11 +7,15 @@
 
 {% block content %}
 <header class="page-header">
-    {# Phones have no sidebar, so Log out lives here (hidden on wider screens). #}
-    <form method="POST" action="{{ url_for('auth.logout') }}" class="mobile-logout">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="text-button">Log out</button>
-    </form>
+    {# Phones have no sidebar, so Settings and Log out live here (hidden on wider screens). #}
+    <div class="mobile-account">
+        <a href="{{ url_for('settings.settings_page') }}" class="mobile-settings">
+            <i data-lucide="settings" aria-hidden="true"></i>Settings</a>
+        <form method="POST" action="{{ url_for('auth.logout') }}" class="mobile-logout">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-button">Log out</button>
+        </form>
+    </div>
     <p class="page-kicker">{{ today | friendly_date(true) }}</p>
     <h1>{{ greeting }}{% if greeting_name %}, {{ greeting_name }}{% endif %}.</h1>
 </header>

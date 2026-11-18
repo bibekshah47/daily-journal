@@ -226,14 +226,29 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.75; flex-shrink: 0; }
     border-top: 1px solid var(--rule);
     min-width: 0;
 }
-.sidebar-name, .sidebar-email {
+/* Name (or email) with a settings icon, linking to Settings */
+.sidebar-settings {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin: 0 -6px 4px;
+    padding: 5px 6px;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    text-decoration: none;
+}
+.sidebar-settings:hover { background: var(--surface-sunken); }
+.sidebar-settings svg.lucide { flex: none; width: 15px; height: 15px; color: var(--ink-faint); }
+.sidebar-settings:hover svg.lucide, .sidebar-settings.active svg.lucide { color: var(--accent); }
+.sidebar-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--text-xs);
-    color: var(--ink-soft);
+    font-size: var(--text-sm);
+    font-weight: 600;
 }
-.sidebar-name { font-size: var(--text-sm); font-weight: 600; color: var(--ink); }
+.sidebar-settings.active .sidebar-name { color: var(--accent); }
 .sidebar-logout { font-size: var(--text-xs); }
 
 /* A button that looks like a text link (Log out, Show password) */
@@ -596,10 +611,13 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
 
 /* Phones have no sidebar, so Home's header carries Log out */
 .home-page .page-header { position: relative; }
-.mobile-logout { display: none; }
+.mobile-account { display: none; }
 @media (max-width: 760px) {
-    .mobile-logout { display: block; position: absolute; top: 0; right: 0; }
-    .mobile-logout .text-button { font-size: var(--text-xs); padding: 4px 0 4px 8px; }
+    .mobile-account { display: flex; align-items: center; gap: 12px; position: absolute; top: 0; right: 0; }
+    .mobile-settings { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); font-weight: 500; padding: 4px 0; text-decoration: none; }
+    .mobile-settings:hover { text-decoration: underline; }
+    .mobile-settings svg.lucide { width: 14px; height: 14px; }
+    .mobile-logout .text-button { font-size: var(--text-xs); padding: 4px 0; }
 }
 
 .home-page .page-header h1 { font-size: var(--text-2xl); }
@@ -1022,6 +1040,20 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
 .field-error { display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; font-size: var(--text-sm); color: var(--danger); }
 .field-error svg.lucide { flex: none; width: 16px; height: 16px; margin-top: 2px; }
 .field-error a { color: inherit; font-weight: 600; }
+.auth-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.auth-link { font-size: var(--text-sm); font-weight: 500; }
+.auth-intro { margin: -10px 0 22px; font-size: var(--text-sm); color: var(--ink-soft); }
+.auth-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-soft);
+    color: var(--ink);
+    font-size: var(--text-sm);
+}
+.auth-notice svg.lucide { flex: none; width: 18px; height: 18px; margin-top: 1px; color: var(--accent); }
 .auth-check { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); cursor: pointer; }
 .auth-check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .auth-submit { width: 100%; min-height: 44px; }
@@ -1390,4 +1422,79 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
 
 @media (max-width: 560px) {
     .download-row { flex-direction: column; align-items: stretch; }
+}
+
+/* ---------- 5h. Settings ---------- */
+
+/* Header, rows, the data line and Delete share one column */
+.main.settings-page > * { max-width: 600px; }
+
+/* Collapsed rows in one card; each opens its own form */
+.settings-list {
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+}
+.settings-row + .settings-row { border-top: 1px solid var(--rule); }
+/* A closed section's form (and its password inputs) gets no layout box at
+   all, so the browser has nothing to autofill. Newer Chrome otherwise only
+   skips painting closed <details> content. */
+details[name="settings-section"]:not([open]) > :not(summary) { display: none; }
+.settings-summary, .settings-delete-toggle { list-style: none; cursor: pointer; }
+.settings-summary::-webkit-details-marker, .settings-delete-toggle::-webkit-details-marker { display: none; }
+.settings-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 56px;
+    padding: 12px 20px;
+    border-radius: var(--radius-lg);
+}
+.settings-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.settings-summary-text { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; min-width: 0; }
+.settings-label { font-size: var(--text-sm); font-weight: 600; min-width: 5.5em; }
+.settings-value { min-width: 0; overflow-wrap: anywhere; font-size: var(--text-sm); color: var(--ink-soft); }
+.settings-value.is-empty { color: var(--ink-faint); }
+.settings-change { flex: none; font-size: var(--text-sm); font-weight: 500; color: var(--accent); }
+.settings-summary:hover .settings-change { text-decoration: underline; }
+.settings-row[open] .settings-change { visibility: hidden; }
+.settings-body { padding: 4px 20px 20px; }
+
+.settings-form { display: flex; flex-direction: column; gap: 18px; }
+.settings-form .form-error { margin: 0; }
+.settings-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.settings-note { font-size: var(--text-sm); color: var(--ink-soft); }
+.settings-note a, .settings-line a { font-weight: 600; }
+.settings-line { margin-top: 16px; font-size: var(--text-sm); color: var(--ink-soft); }
+
+/* Delete: apart from everything else, behind a quiet danger-colored toggle */
+.settings-delete { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--rule); }
+.settings-delete-toggle {
+    display: inline-block;
+    padding: 4px;
+    margin-left: -4px;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--danger);
+}
+.settings-delete-toggle:hover { text-decoration: underline; }
+.settings-delete-toggle:focus-visible { outline: 2px solid var(--danger); outline-offset: 1px; }
+.settings-danger {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 12px;
+    padding: 22px;
+    border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--rule));
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+}
+.settings-danger-title { font-size: var(--text-md); font-weight: 600; color: var(--danger); }
+
+@media (max-width: 760px) {
+    .settings-summary { padding: 12px 16px; }
+    .settings-body { padding: 4px 16px 18px; }
+    .settings-danger { padding: 18px 16px; }
 }

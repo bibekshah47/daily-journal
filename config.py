@@ -25,6 +25,9 @@ DEFAULT_DATABASE = "journal.db"
 # Largest upload accepted (the JSON restore file).
 MAX_UPLOAD_MB = 10
 
+# Outgoing mail (password reset links). STARTTLS on this port by default.
+DEFAULT_MAIL_PORT = 587
+
 # How long "Keep me logged in" lasts.
 REMEMBER_DAYS = 30
 
@@ -59,6 +62,15 @@ def load_config(environ=None):
             "SECRET_KEY must be set to a long random value in production. "
             "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\"")
 
+    port = environ.get("MAIL_PORT", "").strip() or str(DEFAULT_MAIL_PORT)
+    if not port.isdigit():
+        raise ConfigError(f"MAIL_PORT must be a number, not {port!r}.")
+    # Hosts this app answers to, comma-separated ("journal.example.com").
+    # Links in emails use the request's host, so this stops a forged Host
+    # header from putting someone else's domain in a password reset email.
+    trusted_hosts = [host.strip() for host in environ.get("TRUSTED_HOSTS", "").split(",")
+                     if host.strip()]
+
     production = app_env == "production"
     settings = {
         "APP_ENV": app_env,
@@ -75,6 +87,12 @@ def load_config(environ=None):
         "REMEMBER_COOKIE_SECURE": production,
         "REMEMBER_COOKIE_DURATION": timedelta(days=REMEMBER_DAYS),
         "PREFERRED_URL_SCHEME": "https" if production else "http",
+        "MAIL_SERVER": environ.get("MAIL_SERVER", "").strip(),
+        "MAIL_PORT": int(port),
+        "MAIL_USERNAME": environ.get("MAIL_USERNAME", "").strip(),
+        "MAIL_PASSWORD": environ.get("MAIL_PASSWORD", ""),
+        "MAIL_FROM": environ.get("MAIL_FROM", "").strip(),
+        "TRUSTED_HOSTS": trusted_hosts or None,
     }
     if production:
         # Never run the interactive debugger on a public server, even if

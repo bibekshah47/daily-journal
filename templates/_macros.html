@@ -295,23 +295,24 @@
 {% endmacro %}
 
 
-{# Password input with a "Show password" toggle (script: password_toggle_script). #}
-{% macro password_field(autocomplete, error=None, hint=None) %}
+{# Password input with a "Show password" toggle (script: password_toggle_script).
+   field_id is also the field name; a page can have several. #}
+{% macro password_field(autocomplete, error=None, hint=None, field_id="password", label="Password") %}
 <div class="auth-field">
-    <label for="password">Password</label>
+    <label for="{{ field_id }}">{{ label }}</label>
     <div class="password-box">
-        <input type="password" id="password" name="password" required
+        <input type="password" id="{{ field_id }}" name="{{ field_id }}" required
                autocomplete="{{ autocomplete }}" maxlength="128"
                {% if autocomplete == 'new-password' %}minlength="8"{% endif %}
                {% if error %}aria-invalid="true"{% endif %}
-               {% if error %}aria-describedby="password-error"{% elif hint %}aria-describedby="password-hint"{% endif %}>
-        <button type="button" class="text-button password-toggle" id="password-toggle"
-                aria-controls="password" aria-pressed="false" hidden>Show password</button>
+               {% if error %}aria-describedby="{{ field_id }}-error"{% elif hint %}aria-describedby="{{ field_id }}-hint"{% endif %}>
+        <button type="button" class="text-button password-toggle" id="{{ field_id }}-toggle"
+                aria-controls="{{ field_id }}" aria-pressed="false" hidden>Show password</button>
     </div>
     {% if error %}
-    <p class="field-error" id="password-error"><i data-lucide="circle-alert" aria-hidden="true"></i>{{ error }}</p>
+    <p class="field-error" id="{{ field_id }}-error"><i data-lucide="circle-alert" aria-hidden="true"></i>{{ error }}</p>
     {% elif hint %}
-    <p class="field-hint" id="password-hint">{{ hint }}</p>
+    <p class="field-hint" id="{{ field_id }}-hint">{{ hint }}</p>
     {% endif %}
 </div>
 {% endmacro %}
@@ -319,10 +320,9 @@
 
 {% macro password_toggle_script() %}
 <script nonce="{{ csp_nonce }}">
-    (function () {
-        const input = document.getElementById("password");
-        const toggle = document.getElementById("password-toggle");
-        if (!input || !toggle) return;
+    document.querySelectorAll(".password-toggle").forEach(function (toggle) {
+        const input = document.getElementById(toggle.getAttribute("aria-controls"));
+        if (!input) return;
         toggle.hidden = false;   // only useful with JavaScript
         toggle.addEventListener("click", function () {
             const show = input.type === "password";
@@ -333,6 +333,6 @@
         });
         // Never submit (or let the browser save) the password while it is visible.
         if (input.form) input.form.addEventListener("submit", function () { input.type = "password"; });
-    })();
+    });
 </script>
 {% endmacro %}

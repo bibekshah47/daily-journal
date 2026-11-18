@@ -14,6 +14,9 @@ from flask_limiter import Limiter, RateLimitExceeded
 from flask_limiter.util import get_remote_address
 from flask_login import user_loaded_from_cookie
 from flask_wtf.csrf import CSRFError, CSRFProtect
+from limits import parse as parse_limit
+from limits.storage import MemoryStorage
+from limits.strategies import MovingWindowRateLimiter
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 csrf = CSRFProtect()
@@ -24,6 +27,15 @@ limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
 
 LOGIN_LIMITS = "5 per minute;30 per hour"
 SIGNUP_LIMITS = "5 per hour"
+FORGOT_LIMITS = "3 per hour"
+# Settings forms that check the current password, per signed-in user.
+PASSWORD_CHECK_LIMITS = LOGIN_LIMITS
+
+# "Forgot password" requests per email (by keyed hash), so nobody can flood
+# someone's inbox from many IPs. Also in memory.
+_forgot_storage = MemoryStorage()
+_forgot_limiter = MovingWindowRateLimiter(_forgot_storage)
+FORGOT_PER_EMAIL = parse_limit("3 per hour")
 
 # After this many failed logins for one email within LOCKOUT_WINDOW,
 # that email can't log in for LOCKOUT_WINDOW.
@@ -71,6 +83,24 @@ def log_label(email):
 
 def client_ip():
     return request.remote_addr or "unknown"
+
+
+def forgot_email_allowed(email):
+    """Count one reset request for this email; False once over the limit."""
+    if _ratelimit_disabled():
+        return True
+    return _forgot_limiter.hit(FORGOT_PER_EMAIL, "forgot-email", email_key(email))
+
+
+def reset_forgot_limits():
+    """Forget every per-email reset count (for tests)."""
+    _forgot_storage.reset()
+
+
+def current_user_key():
+    """Rate-limit key for forms only signed-in users can post."""
+    from flask_login import current_user
+    return f"user:{current_user.get_id()}" if current_user.is_authenticated else get_remote_address()
 
 
 # ---------- Per-email lockout ----------
@@ -165,6 +195,12 @@ def too_many_requests(error):
     if request.endpoint == "auth.signup":
         return render_template("signup.html", email=email, display_name="",
                                errors={"too_many": TOO_MANY_MESSAGE}), 429
+    if request.endpoint == "auth.forgot_password":
+        return render_template("forgot.html", email=email, sent=False,
+                               error=TOO_MANY_MESSAGE), 429
+    if (request.endpoint or "").startswith("settings."):
+        from views.settings import render_settings
+        return render_settings(429, general_error=TOO_MANY_MESSAGE)
     return render_template("login.html", email=email,
                            error=f"{FAILED_LOGIN_MESSAGE} {TOO_MANY_MESSAGE}",
                            next_path=safe_path(request.values.get("next", ""))), 429

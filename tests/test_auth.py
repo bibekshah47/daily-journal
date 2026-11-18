@@ -138,7 +138,8 @@ class LoginTests(AuthTestCase):
         self.assertEqual((response.status_code, response.location), (302, '/'))
         self.assertNotIn('remember_token', response.headers.get('Set-Cookie', ''))
         home = self.client.get('/').text
-        self.assertIn('class="sidebar-email" title="ann@example.com">ann@example.com</span>', home)
+        # No display name: the sidebar's Settings link shows the email.
+        self.assertIn('<span class="sidebar-name" title="ann@example.com">ann@example.com</span>', home)
         self.assertIn('<form method="POST" action="/logout">', home)
         self.assertIn('class="mobile-logout"', home)              # phones: Log out in Home's header
 
@@ -241,8 +242,8 @@ class DisplayNameTests(AuthTestCase):
         self.assertEqual(self.h1(), 'Good evening, Bibek.')             # first word only
         page = self.client.get('/').text
         self.assertNotIn('welcome back', page)
-        self.assertIn('<span class="sidebar-name" title="Bibek Shah">Bibek Shah</span>', page)
-        self.assertLess(page.index('class="sidebar-name"'), page.index('class="sidebar-email"'))
+        self.assertIn('<span class="sidebar-name" title="Bibek Shah">Bibek Shah</span>', page)   # the name, not the email
+        self.assertNotIn('<span class="sidebar-name" title="b@example.com">b@example.com</span>', page)
         # Logging in again (not just signing up) brings the name back too.
         self.client.post('/logout')
         self.login('b@example.com')
@@ -259,7 +260,9 @@ class DisplayNameTests(AuthTestCase):
                 self.assertEqual(client.post('/signup', data=data).status_code, 302)
                 self.assertIsNone(self.stored_name(f'n{i}@example.com'))      # empty becomes NULL
                 self.assertEqual(self.h1(client), 'Good evening.')
-                self.assertNotIn('class="sidebar-name"', client.get('/').text)
+                # No name: the sidebar's Settings link shows the email instead.
+                self.assertIn(f'<span class="sidebar-name" title="n{i}@example.com">n{i}@example.com</span>',
+                              client.get('/').text)
 
     def test_greeting_by_time_of_day(self):
         user_id = add_user(self.path, 'b@example.com', display_name='Bibek')
@@ -358,7 +361,8 @@ class DisplayNameTests(AuthTestCase):
 
 class LoggedOutTests(AuthTestCase):
     def test_every_page_and_action_redirects_to_login(self):
-        public = {'auth.login', 'auth.signup', 'auth.logout', 'static'}
+        public = {'auth.login', 'auth.signup', 'auth.logout', 'auth.forgot_password',
+                  'auth.reset_password', 'static'}
         checked = set()
         for rule in self.app.url_map.iter_rules():
             if rule.endpoint in public:
@@ -376,7 +380,10 @@ class LoggedOutTests(AuthTestCase):
                               'entries.restore_entry', 'entries.trash', 'entries.purge_trashed_entry',
                               'entries.empty_trash_route', 'history.history', 'insights.insights',
                               'insights.week', 'backup.backup_page', 'backup.export_markdown',
-                              'backup.export_json', 'backup.restore_backup'}, checked)
+                              'backup.export_json', 'backup.restore_backup',
+                              'settings.settings_page', 'settings.change_name',
+                              'settings.change_email_route', 'settings.change_password',
+                              'settings.delete_account'}, checked)
 
     def test_public_pages(self):
         for url in ['/login', '/signup', '/static/style.css']:

@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+{% set active_page = 'settings' %}
+
+{% block title %}Settings{% endblock %}
+{% block main_class %}settings-page{% endblock %}
+
+{% macro field_message(field_id, hint=None) %}
+{% if errors.get(field_id) %}
+<p class="field-error" id="{{ field_id }}-error"><i data-lucide="circle-alert" aria-hidden="true"></i>{{ errors[field_id] }}</p>
+{% elif hint %}
+<p class="field-hint" id="{{ field_id }}-hint">{{ hint }}</p>
+{% endif %}
+{% endmacro %}
+
+{% macro described_by(field_id, hint=False) -%}
+{% if errors.get(field_id) %}aria-invalid="true" aria-describedby="{{ field_id }}-error"{% elif hint %}aria-describedby="{{ field_id }}-hint"{% endif %}
+{%- endmacro %}
+
+{# "Too many attempts" from the rate limiter, shown inside the refused form. #}
+{% macro section_error(section) %}
+{% if general_error and open_section == section %}
+<div class="form-error" role="alert">
+    <i data-lucide="circle-alert" aria-hidden="true"></i>
+    <span>{{ general_error }}</span>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro actions(label, danger=False) %}
+<div class="settings-actions">
+    <button type="submit" class="button {{ 'button-danger' if danger else 'button-primary' }}">{{ label }}</button>
+    {# Without JavaScript, Cancel reloads the page with every section closed. #}
+    <a href="{{ url_for('settings.settings_page') }}" class="button button-quiet settings-cancel">Cancel</a>
+</div>
+{% endmacro %}
+
+{# One collapsed row. Its form (and any password inputs) is only rendered
+   once the row is opened, so the browser doesn't autofill hidden fields. #}
+{% macro row(section, label, value=None, placeholder=None) %}
+<details class="settings-row" name="settings-section" id="settings-{{ section }}"
+         {% if open_section == section %}open{% endif %}>
+    <summary class="settings-summary">
+        <span class="settings-summary-text">
+            <span class="settings-label">{{ label }}<span class="visually-hidden">:</span></span>
+            {% if value %}<span class="settings-value">{{ value }}</span>
+            {% elif placeholder %}<span class="settings-value is-empty">{{ placeholder }}</span>{% endif %}
+        </span>
+        <span class="settings-change">Change</span>
+    </summary>
+    <div class="settings-body">
+        {{ caller() }}
+    </div>
+</details>
+{% endmacro %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Settings</h1>
+    <p class="page-subtitle">Your name, email and password.</p>
+</header>
+
+{% if general_error and not open_section %}
+<div class="form-error" role="alert">
+    <i data-lucide="circle-alert" aria-hidden="true"></i>
+    <span>{{ general_error }}</span>
+</div>
+{% endif %}
+
+<div class="settings-list">
+    {% call row('name', 'Name', current_user.display_name, 'Not set') %}
+    <form method="POST" action="{{ url_for('settings.change_name') }}" class="settings-form" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ section_error('name') }}
+        <div class="auth-field">
+            <label for="display_name">What should we call you?</label>
+            <input type="text" id="display_name" name="display_name" value="{{ values.display_name }}"
+                   autocomplete="given-name" maxlength="40" {{ described_by('display_name', true) }}>
+            {{ field_message('display_name', 'Optional. Your first name or a nickname.') }}
+        </div>
+        {{ actions('Save') }}
+    </form>
+    {% endcall %}
+
+    {% call row('email', 'Email', current_user.email) %}
+    <form method="POST" action="{{ url_for('settings.change_email_route') }}" class="settings-form" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ section_error('email') }}
+        <div class="auth-field">
+            <label for="new_email">New email</label>
+            <input type="email" id="new_email" name="new_email" value="{{ values.new_email }}" required
+                   placeholder="new@example.com" autocomplete="off" autocapitalize="none"
+                   spellcheck="false" maxlength="254" {{ described_by('new_email') }}>
+            {{ field_message('new_email') }}
+        </div>
+        {{ ui.password_field('current-password', errors.get('email_password'), field_id='email_password', label='Current password') }}
+        {{ actions('Save') }}
+    </form>
+    {% endcall %}
+
+    {% call row('password', 'Password',
+                ('Last changed ' ~ (password_changed | friendly_date)) if password_changed else None) %}
+    <form method="POST" action="{{ url_for('settings.change_password') }}" class="settings-form" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ section_error('password') }}
+        <p class="settings-note">Changing it logs you out on your other devices.</p>
+        {{ ui.password_field('current-password', errors.get('current_password'), field_id='current_password', label='Current password') }}
+        {{ ui.password_field('new-password', errors.get('new_password'), 'At least 8 characters.', field_id='new_password', label='New password') }}
+        {{ actions('Save') }}
+    </form>
+    {% endcall %}
+</div>
+
+<p class="settings-line">Download your entries any time from
+    <a href="{{ url_for('backup.backup_page') }}">Backup &amp; export</a>.</p>
+
+<details class="settings-delete" name="settings-section" id="settings-delete"
+         {% if open_section == 'delete' %}open{% endif %}>
+    <summary class="settings-delete-toggle">Delete account…</summary>
+    <section class="settings-danger" aria-labelledby="delete-heading">
+        <h2 id="delete-heading" class="settings-danger-title">Delete account</h2>
+        <p class="settings-note">This erases your account and all of your entries and tags, forever. It can't be undone.
+            You may want to <a href="{{ url_for('backup.backup_page') }}">download a backup</a> first.</p>
+        <form method="POST" action="{{ url_for('settings.delete_account') }}" class="settings-form"
+              id="delete-account-form" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {{ section_error('delete') }}
+            {{ ui.password_field('current-password', errors.get('delete_password'), field_id='delete_password', label='Current password') }}
+            <div class="auth-field">
+                <label for="delete_confirm">Type DELETE to confirm</label>
+                <input type="text" id="delete_confirm" name="delete_confirm" value="{{ values.delete_confirm }}" required
+                       autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="20"
+                       {{ described_by('delete_confirm') }}>
+                {{ field_message('delete_confirm') }}
+            </div>
+            {{ actions('Delete account', danger=True) }}
+        </form>
+    </section>
+</details>
+
+<!-- Final confirmation before deleting the account -->
+<dialog class="dialog" id="delete-account-dialog" aria-labelledby="delete-account-title">
+    <h2 id="delete-account-title">Delete your account?</h2>
+    <p>Your account and {{ entry_count }} {{ 'entry' if entry_count == 1 else 'entries' }} will be erased now. This can't be undone.</p>
+    <div class="dialog-actions">
+        <button type="button" class="button button-quiet" id="delete-account-cancel" autofocus>Keep my account</button>
+        <button type="button" class="button button-danger" id="delete-account-confirm">Delete forever</button>
+    </div>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+{{ ui.password_toggle_script() }}
+<script nonce="{{ csp_nonce }}">
+    (function () {
+        const sections = Array.from(document.querySelectorAll('details[name="settings-section"]'));
+
+        // Forget typed passwords (and hide them again) whenever a section closes.
+        function clearPasswords(section) {
+            section.querySelectorAll('input[autocomplete$="password"]').forEach(function (input) {
+                input.value = "";
+                input.type = "password";
+            });
+            section.querySelectorAll(".password-toggle").forEach(function (toggle) {
+                toggle.textContent = "Show password";
+                toggle.setAttribute("aria-pressed", "false");
+            });
+        }
+
+        sections.forEach(function (section) {
+            section.addEventListener("toggle", function () {
+                if (!section.open) {
+                    clearPasswords(section);
+                    return;
+                }
+                // One section at a time (browsers without <details name> too).
+                sections.forEach(function (other) {
+                    if (other !== section && other.open) other.open = false;
+                });
+                const field = section.querySelector('[aria-invalid="true"]') ||
+                              section.querySelector('input:not([type="hidden"])');
+                if (field) field.focus();
+            });
+
+            const cancel = section.querySelector(".settings-cancel");
+            if (!cancel) return;
+            cancel.addEventListener("click", function (event) {
+                // After a server error, the link's reload clears the messages too.
+                if (section.querySelector(".field-error, .form-error")) return;
+                event.preventDefault();
+                const form = section.querySelector("form");
+                if (form) form.reset();
+                section.open = false;
+                section.querySelector("summary").focus();
+            });
+        });
+    })();
+
+    (function () {
+        // Without JavaScript the form posts straight away; the server checks
+        // the password and the typed DELETE either way.
+        const form = document.getElementById("delete-account-form");
+        const dialog = document.getElementById("delete-account-dialog");
+        if (!form || !dialog || !dialog.showModal) return;
+        let confirmed = false;
+        form.addEventListener("submit", function (event) {
+            if (confirmed) return;
+            event.preventDefault();
+            dialog.showModal();
+        });
+        document.getElementById("delete-account-cancel").addEventListener("click", function () {
+            dialog.close();
+        });
+        document.getElementById("delete-account-confirm").addEventListener("click", function () {
+            confirmed = true;
+            dialog.close();
+            form.requestSubmit();
+        });
+    })();
+</script>
+{% endblock %}

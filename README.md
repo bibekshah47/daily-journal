@@ -18,8 +18,11 @@ Mood names, emoji and colors are defined once in `MOODS` in `views/shared.py`.
 | `views/history.py` | History calendar, search and filters |
 | `views/insights.py` | Insights and the weekly review |
 | `views/backup.py` | Backup & export and JSON restore |
-| `views/auth.py` | Sign up, log in, log out, and the login check on every other page |
-| `accounts.py` | Email and password rules, password hashing, claiming old entries |
+| `views/auth.py` | Sign up, log in, log out, forgot/reset password, and the login check on every other page |
+| `views/settings.py` | Settings: name, email, password, delete account |
+| `accounts.py` | Email and password rules, password hashing, reset tokens, claiming old entries |
+| `security.py` | CSRF, rate limits, login lockout, security headers |
+| `mailer.py` | Sends email (printed to the terminal in development) |
 | `database.py` | Creates and upgrades the schema |
 | `backup.py`, `tags.py`, `memories.py`, `weekly.py`, `journal_insights.py`, `trash.py` | Logic and SQL; each function takes a connection and the user's id |
 
@@ -48,6 +51,20 @@ Unsaved Write drafts live in the browser under a key that includes the user id.
 and `Secure` when `APP_ENV=production`, so production must be served over HTTPS.
 A session cookie used from a different IP address or browser is dropped
 (Flask-Login "strong" protection), so moving networks can mean logging in again.
+
+### Settings, sessions and password reset
+
+`/settings` (linked from your name in the sidebar, or Settings on Home on a
+phone) changes your name, email and password, and deletes the account with
+everything in it. Each login is stored as `<user id>:<session_version>`;
+changing or resetting the password raises `session_version`, which ends every
+other login, "Keep me logged in" cookies included. User ids are never reused,
+so nothing that names a deleted account can reach a new one.
+
+"Forgot password?" emails a link that works for 1 hour and only once. The page
+says the same thing whether or not the email has an account. Note that the
+automatic daily backups (kept 14 days) still contain a deleted account until
+they rotate out.
 
 ### Security protections (security.py)
 
@@ -101,6 +118,8 @@ for local use:
 | `APP_ENV` | `development` | `development` or `production` |
 | `SECRET_KEY` | a fixed development key | Signs the session cookie ("Entry saved." messages, and logins later) |
 | `DATABASE` | `journal.db` | Path to the SQLite file. The older `JOURNAL_DATABASE` name still works |
+| `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | empty, `587` | SMTP (STARTTLS) for reset emails. Without `MAIL_SERVER`, or in development, emails are printed to the terminal |
+| `TRUSTED_HOSTS` | empty | Production: the host name(s) the site is served at, comma-separated. Stops forged links in reset emails |
 
 Variables set in your shell take priority over `.env`. In production
 (`APP_ENV=production`) the app refuses to start unless `SECRET_KEY` is set to a

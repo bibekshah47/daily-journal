@@ -24,6 +24,24 @@ TAGS_TABLE = """
 """
 
 
+# AUTOINCREMENT so a deleted account's id is never given to a new account:
+# logins ("<id>:<session_version>") and reset links name users by id, so a
+# reused id could let a stale login or link reach someone else's account.
+USERS_TABLE = """
+    CREATE TABLE IF NOT EXISTS {name} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        display_name TEXT,
+        session_version INTEGER NOT NULL DEFAULT 0,
+        password_changed_at TEXT
+    )
+"""
+USER_COLUMNS = ("id, email, password_hash, created_at, display_name, session_version, "
+                "password_changed_at")
+
+
 def _columns(connection, table):
     # Fixed table names only.
     return {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
@@ -57,29 +75,53 @@ def _rebuild_tags_per_user(connection):
         raise RuntimeError("Tag upgrade lost rows; nothing was changed.")
 
 
+def _users_need_rebuild(connection):
+    """True for a users table whose ids can be reused (no AUTOINCREMENT)."""
+    row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").fetchone()
+    return row is not None and "AUTOINCREMENT" not in row[0].upper()
+
+
+def _rebuild_users_autoincrement(connection):
+    """Copy users into an AUTOINCREMENT table, keeping every id (and so every
+    entry and tag owner). Runs inside the caller's transaction with foreign
+    keys off, like the tags rebuild: otherwise DROP TABLE would cascade."""
+    before = connection.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    connection.execute(USERS_TABLE.format(name="users_autoincrement"))
+    connection.execute(f"INSERT INTO users_autoincrement ({USER_COLUMNS}) "
+                       f"SELECT {USER_COLUMNS} FROM users")
+    connection.execute("DROP TABLE users")
+    connection.execute("ALTER TABLE users_autoincrement RENAME TO users")
+    if connection.execute("SELECT COUNT(*) FROM users").fetchone()[0] != before:
+        raise RuntimeError("User upgrade lost rows; nothing was changed.")
+
+
 def initialize_database(database_path="journal.db"):
     connection = connect(database_path)
     try:
-        # The tags rebuild must run with foreign keys off, and SQLite only
-        # lets that change outside a transaction. Only this connection is
-        # affected, and it is closed at the end.
-        if _tags_need_rebuild(connection):
+        # The tags and users rebuilds must run with foreign keys off, and
+        # SQLite only lets that change outside a transaction. Only this
+        # connection is affected, and it is closed at the end.
+        if _tags_need_rebuild(connection) or _users_need_rebuild(connection):
             connection.execute("PRAGMA foreign_keys = OFF")
         with connection:
             # Serialize schema checks and upgrades across concurrent requests.
             # Explicit BEGIN also keeps the DDL changes in one transaction.
             connection.execute("BEGIN IMMEDIATE")
-            connection.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY,
-                    email TEXT NOT NULL UNIQUE,
-                    password_hash TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                )
-            """)
+            connection.execute(USERS_TABLE.format(name="users"))
             # Optional name for the greeting; NULL for existing and unnamed users.
             if "display_name" not in _columns(connection, "users"):
                 connection.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
+            # Raised to log the user out everywhere (password change or reset).
+            if "session_version" not in _columns(connection, "users"):
+                connection.execute(
+                    "ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0")
+            # Shown on Settings; NULL (not shown) until the password next changes.
+            if "password_changed_at" not in _columns(connection, "users"):
+                connection.execute("ALTER TABLE users ADD COLUMN password_changed_at TEXT")
+            # Checked inside the transaction, after the columns above exist.
+            if _users_need_rebuild(connection):
+                _rebuild_users_autoincrement(connection)
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS entries (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

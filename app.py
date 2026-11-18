@@ -4,11 +4,13 @@ Settings come from config.py (environment variables / .env), each request
 gets one database connection from db.py, and the pages live in blueprints
 under views/:
 
-    auth      /signup  /login  /logout  (the only pages open without logging in)
+    auth      /signup  /login  /logout  /forgot  /reset/<token>
+              (the only pages open without logging in)
     entries   /  /write  /entry/<id>  /edit/<id>  /favorite  /delete  /restore  /trash
     history   /history
     insights  /insights  /week
     backup    /backup  and its downloads and restore
+    settings  /settings: name, email, password, delete account
 """
 from datetime import date, datetime
 import os
@@ -25,7 +27,7 @@ from config import load_config
 from database import initialize_database
 from trash import cleanup_trash
 from views import backup as backup_views
-from views import auth, entries, history, insights
+from views import auth, entries, history, insights, settings
 from views.shared import register_template_helpers
 
 
@@ -120,6 +122,7 @@ def create_app(overrides=None):
     app.register_blueprint(history.bp)
     app.register_blueprint(insights.bp)
     app.register_blueprint(backup_views.bp)
+    app.register_blueprint(settings.bp)
 
     app.register_error_handler(404, page_not_found)
     app.cli.command("init-db")(init_db_command)

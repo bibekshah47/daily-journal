@@ -29,10 +29,13 @@
 
         {{ ui.password_field('current-password') }}
 
-        <label class="auth-check">
-            <input type="checkbox" name="remember" value="1">
-            Keep me logged in
-        </label>
+        <div class="auth-row">
+            <label class="auth-check">
+                <input type="checkbox" name="remember" value="1">
+                Keep me logged in
+            </label>
+            <a href="{{ url_for('auth.forgot_password') }}" class="auth-link">Forgot password?</a>
+        </div>
 
         <button type="submit" class="button button-primary auth-submit">Log in</button>
     </form>

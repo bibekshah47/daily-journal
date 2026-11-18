@@ -33,7 +33,7 @@ def add_user(path, email=TEST_EMAIL, password=TEST_PASSWORD, display_name=None):
         db.close()
 
 
-def log_in_as(client, user_id):
+def log_in_as(client, user_id, session_version=0):
     """Log a test client in without making a request (so no daily-backup hook runs).
 
     These are the session keys Flask-Login itself writes in login_user(),
@@ -42,7 +42,7 @@ def log_in_as(client, user_id):
     with client.application.test_request_context(environ_base=client.environ_base):
         identifier = _create_identifier()
     with client.session_transaction() as session:
-        session['_user_id'] = str(user_id)
+        session['_user_id'] = f'{user_id}:{session_version}'   # User.get_id()
         session['_fresh'] = True
         session['_id'] = identifier
 

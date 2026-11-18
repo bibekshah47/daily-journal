@@ -44,10 +44,13 @@
             <span>Backup &amp; export</span>
         </a>
         <div class="sidebar-account">
-            {% if current_user.display_name %}
-            <span class="sidebar-name" title="{{ current_user.display_name }}">{{ current_user.display_name }}</span>
-            {% endif %}
-            <span class="sidebar-email" title="{{ current_user.email }}">{{ current_user.email }}</span>
+            {% set account_label = current_user.display_name or current_user.email %}
+            <a class="sidebar-settings {% if active == 'settings' %}active{% endif %}" href="{{ url_for('settings.settings_page') }}"
+               title="Settings" {% if active == 'settings' %}aria-current="page"{% endif %}>
+                <i data-lucide="settings" aria-hidden="true"></i>
+                <span class="sidebar-name" title="{{ account_label }}">{{ account_label }}</span>
+                <span class="visually-hidden">, settings</span>
+            </a>
             <form method="POST" action="{{ url_for('auth.logout') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="text-button sidebar-logout">Log out</button>
@@ -83,6 +86,15 @@
     {% endif %}
     {% endwith %}
 
+    {% if clear_draft_key %}
+    {# The account was just deleted: remove its unsaved Write draft too. #}
+    <script nonce="{{ csp_nonce }}">
+        try {
+            localStorage.removeItem({{ clear_draft_key | tojson }});
+            sessionStorage.removeItem("my-journal-save-pending");
+        } catch (error) {}
+    </script>
+    {% endif %}
     {% block scripts %}{% endblock %}
     <script nonce="{{ csp_nonce }}">
         lucide.createIcons();

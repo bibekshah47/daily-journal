@@ -7,6 +7,7 @@ from datetime import datetime
 import re
 import sqlite3
 
+from itsdangerous import BadData, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
 MIN_PASSWORD_LENGTH = 8
@@ -17,6 +18,11 @@ MAX_DISPLAY_NAME_LENGTH = 40
 # Deliberately simple: something@something.something, no spaces.
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _SPACES = re.compile(r"\s+")
+
+# Password reset links: signed with SECRET_KEY, valid for one hour, and only
+# while the account's session_version is unchanged (so each link works once).
+RESET_SALT = "password-reset"
+RESET_MAX_AGE = 3600
 
 # Checked when an email isn't found, so a wrong email takes as long as a
 # wrong password and response times don't reveal which accounts exist.
@@ -74,34 +80,39 @@ def create_user(connection, email, password, display_name=None, now=None):
 
     Raises EmailTaken if the email is in use. Does not commit.
     """
+    created = (now or datetime.now()).isoformat()
     try:
         cursor = connection.execute(
-            "INSERT INTO users (email, password_hash, created_at, display_name) VALUES (?, ?, ?, ?)",
-            (email, generate_password_hash(password), (now or datetime.now()).isoformat(),
-             display_name))
+            "INSERT INTO users (email, password_hash, created_at, display_name, password_changed_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (email, generate_password_hash(password), created, display_name, created))
     except sqlite3.IntegrityError as error:
         raise EmailTaken(email) from error
     return cursor.lastrowid
 
 
 def find_user(connection, user_id):
-    """(id, email, display_name) for a user id, or None."""
+    """(id, email, display_name, session_version) for a user id, or None."""
     return connection.execute(
-        "SELECT id, email, display_name FROM users WHERE id = ?", (user_id,)).fetchone()
+        "SELECT id, email, display_name, session_version FROM users WHERE id = ?",
+        (user_id,)).fetchone()
 
 
 def find_user_by_email(connection, email):
+    """(id, email, display_name, session_version) for an email, or None."""
     return connection.execute(
-        "SELECT id, email FROM users WHERE email = ?", (normalize_email(email),)).fetchone()
+        "SELECT id, email, display_name, session_version FROM users WHERE email = ?",
+        (normalize_email(email),)).fetchone()
 
 
 def authenticate(connection, email, password):
-    """(id, email, display_name) if the email and password match an account, else None."""
+    """(id, email, display_name, session_version) if the email and password
+    match an account, else None."""
     global _dummy_hash
     if len(password) > MAX_PASSWORD_LENGTH:
         return None   # never spend time hashing absurdly long input
     row = connection.execute(
-        "SELECT id, email, password_hash, display_name FROM users WHERE email = ?",
+        "SELECT id, email, password_hash, display_name, session_version FROM users WHERE email = ?",
         (normalize_email(email),)).fetchone()
     if row is None:
         if _dummy_hash is None:
@@ -110,7 +121,99 @@ def authenticate(connection, email, password):
         return None
     if not check_password_hash(row[2], password):
         return None
-    return row[0], row[1], row[3]
+    return row[0], row[1], row[3], row[4]
+
+
+# ---------- Settings ----------
+
+def check_password(connection, user_id, password):
+    """True if `password` is this user's current password."""
+    if len(password) > MAX_PASSWORD_LENGTH:
+        return False
+    row = connection.execute(
+        "SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+    return row is not None and check_password_hash(row[0], password)
+
+
+def change_display_name(connection, user_id, display_name):
+    """Set the (normalized, checked) display name; None removes it. Commits."""
+    with connection:
+        connection.execute("UPDATE users SET display_name = ? WHERE id = ?",
+                           (display_name, user_id))
+
+
+def change_email(connection, user_id, email):
+    """Set the (normalized, checked) email. Raises EmailTaken. Commits."""
+    try:
+        with connection:
+            connection.execute("UPDATE users SET email = ? WHERE id = ?", (email, user_id))
+    except sqlite3.IntegrityError as error:
+        raise EmailTaken(email) from error
+
+
+def password_changed_at(connection, user_id):
+    """When the password was last set (ISO text), or None if not recorded."""
+    row = connection.execute(
+        "SELECT password_changed_at FROM users WHERE id = ?", (user_id,)).fetchone()
+    return row[0] if row else None
+
+
+def set_password(connection, user_id, password, now=None):
+    """Store a new password and end every session and reset link.
+
+    Increases session_version, so logins (including "Keep me logged in"
+    cookies) made before this stop working. Returns the new version. Commits.
+    """
+    with connection:
+        connection.execute(
+            "UPDATE users SET password_hash = ?, session_version = session_version + 1, "
+            "password_changed_at = ? WHERE id = ?",
+            (generate_password_hash(password), (now or datetime.now()).isoformat(), user_id))
+        return connection.execute(
+            "SELECT session_version FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+
+
+def delete_user(connection, user_id):
+    """Erase the account and every entry, tag and tag link it owns. Commits.
+
+    The foreign keys cascade from users anyway; deleting entries and tags
+    explicitly as well keeps this complete on databases upgraded from older
+    schemas.
+    """
+    with connection:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("DELETE FROM entries WHERE user_id = ?", (user_id,))
+        connection.execute("DELETE FROM tags WHERE user_id = ?", (user_id,))
+        connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+
+# ---------- Password reset links ----------
+
+def _reset_serializer(secret_key):
+    return URLSafeTimedSerializer(secret_key, salt=RESET_SALT)
+
+
+def make_reset_token(secret_key, user_id, session_version):
+    return _reset_serializer(secret_key).dumps(
+        {"user_id": user_id, "session_version": session_version})
+
+
+def user_for_reset_token(connection, secret_key, token, max_age=RESET_MAX_AGE):
+    """The user row a reset token is for, or None if the token is invalid,
+    expired, tampered with, or already used (session_version changed)."""
+    try:
+        data = _reset_serializer(secret_key).loads(token, max_age=max_age)
+    except BadData:
+        return None
+    if not isinstance(data, dict):
+        return None
+    user_id, version = data.get("user_id"), data.get("session_version")
+    if type(user_id) is not int or type(version) is not int:
+        return None
+    row = find_user(connection, user_id)
+    if row is None or row[3] != version:
+        return None
+    return row
 
 
 def assign_unowned(connection, user_id):

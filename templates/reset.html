@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+
+{% block title %}Choose a new password{% endblock %}
+{% block main_class %}auth-page{% endblock %}
+
+{% block content %}
+<section class="auth-card" aria-labelledby="auth-heading">
+    <p class="auth-brand"><i data-lucide="book-open" aria-hidden="true"></i> My Journal</p>
+    {% if expired %}
+    <h1 id="auth-heading">Link expired</h1>
+    <div class="form-error" role="alert">
+        <i data-lucide="circle-alert" aria-hidden="true"></i>
+        <span>This link has expired or was already used.</span>
+    </div>
+    <a href="{{ url_for('auth.forgot_password') }}" class="button button-primary auth-submit">Get a new link</a>
+    <p class="auth-switch"><a href="{{ url_for('auth.login') }}">Back to log in</a></p>
+    {% else %}
+    <h1 id="auth-heading">Choose a new password</h1>
+    <form method="POST" action="" class="auth-form" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ ui.password_field('new-password', error, 'At least 8 characters.', label='New password') }}
+        <button type="submit" class="button button-primary auth-submit">Save new password</button>
+    </form>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if not expired %}
+{{ ui.password_toggle_script() }}
+<script nonce="{{ csp_nonce }}">document.getElementById("password").focus();</script>
+{% endif %}
+{% endblock %}

@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
-from flask import abort, request
+from flask import abort, request, session
 from flask_login import current_user
 
 from db import get_db
@@ -74,7 +74,15 @@ def register_template_helpers(app):
 
     @app.context_processor
     def shared_template_values():
-        return {"moods": MOODS, "mood_lookup": MOOD_LOOKUP, "draft_key": draft_key()}
+        return {"moods": MOODS, "mood_lookup": MOOD_LOOKUP, "draft_key": draft_key(),
+                # Set when an account is deleted: the next page clears its draft.
+                "clear_draft_key": pop_clear_draft_key()}
+
+
+def pop_clear_draft_key():
+    """The deleted account's draft key, once. (Checked first: popping a
+    missing key would still mark the session changed and resend the cookie.)"""
+    return session.pop("clear_draft_key") if "clear_draft_key" in session else None
 
 
 # ---------- The signed-in user ----------

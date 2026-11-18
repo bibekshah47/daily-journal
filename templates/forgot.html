@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Reset your password{% endblock %}
+{% block main_class %}auth-page{% endblock %}
+
+{% block content %}
+<section class="auth-card" aria-labelledby="auth-heading">
+    <p class="auth-brand"><i data-lucide="book-open" aria-hidden="true"></i> My Journal</p>
+    <h1 id="auth-heading">Reset your password</h1>
+
+    {% if sent %}
+    <div class="auth-notice" role="status">
+        <i data-lucide="mail" aria-hidden="true"></i>
+        <span>{{ message }}</span>
+    </div>
+    <p class="auth-switch"><a href="{{ url_for('auth.login') }}">Back to log in</a></p>
+    {% else %}
+    <p class="auth-intro">Enter the email you log in with and we'll send you a link to choose a new password.</p>
+    <form method="POST" action="{{ url_for('auth.forgot_password') }}" class="auth-form" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        {% if error %}
+        <div class="form-error" role="alert">
+            <i data-lucide="circle-alert" aria-hidden="true"></i>
+            <span>{{ error }}</span>
+        </div>
+        {% endif %}
+
+        <div class="auth-field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" value="{{ email }}" required autofocus
+                   autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254"
+                   {% if email_problem %}aria-invalid="true" aria-describedby="email-error"{% endif %}>
+            {% if email_problem %}
+            <p class="field-error" id="email-error"><i data-lucide="circle-alert" aria-hidden="true"></i>{{ email_problem }}</p>
+            {% endif %}
+        </div>
+
+        <button type="submit" class="button button-primary auth-submit">Send reset link</button>
+    </form>
+    <p class="auth-switch">Remembered it? <a href="{{ url_for('auth.login') }}">Log in</a></p>
+    {% endif %}
+</section>
+{% endblock %}

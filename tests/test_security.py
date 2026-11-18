@@ -219,7 +219,7 @@ class SessionTests(SecurityTestCase):
         self.login(password=TEST_PASSWORD)
         with self.client.session_transaction() as session:
             self.assertNotIn('planted', session)
-            self.assertEqual(session['_user_id'], str(self.user_id))
+            self.assertEqual(session['_user_id'], f'{self.user_id}:0')
 
     def test_logout_clears_the_session(self):
         self.login(password=TEST_PASSWORD)
