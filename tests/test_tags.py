@@ -15,7 +15,7 @@ from database import connect, initialize_database
 from tags import (all_tags_with_counts, get_tags_for_entries, normalize_tag,
                   parse_tags, set_entry_tags)
 import backup
-from tests.helpers import SECURITY_OFF, add_user, signed_in_client
+from tests.helpers import SECURITY_OFF, add_user, new_test_database, signed_in_client, skip_daily_maintenance, sqlite_only
 
 
 class TagRuleTests(unittest.TestCase):
@@ -74,11 +74,7 @@ class TagAppTests(unittest.TestCase):
     # ---------- helpers ----------
 
     def new_database(self, name):
-        folder = Path(self.tmp.name) / name.replace('.db', '')
-        folder.mkdir()
-        path = str(folder / name)
-        initialize_database(path)
-        return path
+        return new_test_database(self, name)
 
     def use_database(self, path):
         self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=path)
@@ -116,6 +112,7 @@ class TagAppTests(unittest.TestCase):
 
     # ---------- schema ----------
 
+    @sqlite_only
     def test_upgrade_keeps_existing_entries_and_enables_foreign_keys(self):
         legacy = str(Path(self.tmp.name) / 'legacy.db')
         with sqlite3.connect(legacy) as db:

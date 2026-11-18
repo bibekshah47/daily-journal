@@ -1,32 +1,32 @@
-"""Insights calculations and page integration, using temporary SQLite records."""
+"""Insights calculations and page integration, using temporary databases."""
 from datetime import date
 import hashlib
 import importlib
 import os
 from pathlib import Path
-import sqlite3
-import tempfile
 import unittest
 
-from database import initialize_database
+from database import connect
 from journal_insights import get_journal_stats
-from tests.helpers import SECURITY_OFF, signed_in_client
+from tests.helpers import SECURITY_OFF, add_user, new_test_database, signed_in_client
 
 
 class InsightsTests(unittest.TestCase):
     def setUp(self):
-        self.db = sqlite3.connect(':memory:')
-        self.db.execute('CREATE TABLE entries (created_at TEXT, went_well TEXT, went_wrong TEXT, improve_tomorrow TEXT, deleted_at TEXT, user_id INTEGER)')
-        # Stats read the same view the app uses, which hides entries in Trash.
-        self.db.execute('CREATE VIEW live_entries AS SELECT * FROM entries WHERE deleted_at IS NULL')
+        path = new_test_database(self)
+        # A fresh database: these get ids 1 and 2.
+        add_user(path, 'one@example.com')
+        add_user(path, 'two@example.com')
+        self.db = connect(path)
 
     def tearDown(self):
         self.db.close()
 
     def add(self, day, *answers, user_id=1):
         answers = list(answers) + [None] * (3 - len(answers))
-        self.db.execute('INSERT INTO entries (created_at, went_well, went_wrong, improve_tomorrow, user_id) '
-                        'VALUES (?,?,?,?,?)', (day, *answers, user_id))
+        self.db.execute('INSERT INTO entries (content, created_at, went_well, went_wrong, '
+                        'improve_tomorrow, user_id) VALUES (?,?,?,?,?,?)',
+                        ('Words', day, *answers, user_id))
 
     def stats(self, today=date(2026, 11, 13), user_id=1):
         return get_journal_stats(self.db, today, user_id=user_id)
@@ -92,42 +92,39 @@ class InsightsTests(unittest.TestCase):
     def test_page_sidebar_links_and_shared_home_stats(self):
         real = Path('journal.db')
         digest = hashlib.sha256(real.read_bytes()).hexdigest() if real.exists() else None
-        with tempfile.TemporaryDirectory() as tmp:
-            path = str(Path(tmp) / 'test.db')
-            initialize_database(path)
-            previous_env = os.environ.get('JOURNAL_DATABASE')
-            os.environ['JOURNAL_DATABASE'] = path
-            app = importlib.import_module('app').app
-            previous_config = app.config['DATABASE']
-            app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=path)
-            try:
-                client, user_id = signed_in_client(app, path)
-                page = client.get('/insights')
-                self.assertEqual(page.status_code, 200)
-                self.assertIn('Write your first entry', page.text)
-                self.assertIn('No reflections yet', page.text)
-                self.assertIn('0.0%', page.text)
-                self.assertIn('aria-current="page"', page.text)
-                response = client.post('/write', data={'journal':'Body','went_well':'Win'})
-                entry_id = int(response.location.split('/entry/')[1].split('?')[0])
-                for url in ['/','/write','/history',f'/edit/{entry_id}',f'/entry/{entry_id}','/insights']:
-                    result = client.get(url)
-                    self.assertEqual(result.status_code, 200)
-                    self.assertIn('href="/insights"', result.text)
-                page = client.get('/insights').text
-                self.assertIn('100.0%', page)
-                self.assertIn('What went well today?', page)
-                self.assertNotIn('No reflections yet', page)
-                self.assertNotIn('chart.js', page.lower())
-                with sqlite3.connect(path) as db:
-                    db.row_factory = sqlite3.Row
-                    stats = get_journal_stats(db, user_id=user_id)
-                    self.assertEqual(stats['total_entries'], 1)
-                    self.assertEqual(stats['current_streak'], 1)
-                    self.assertEqual(stats['monthly_entries'], 1)
-            finally:
-                app.config['DATABASE'] = previous_config
-                if previous_env is None: os.environ.pop('JOURNAL_DATABASE', None)
-                else: os.environ['JOURNAL_DATABASE'] = previous_env
+        path = new_test_database(self)
+        previous_env = os.environ.get('JOURNAL_DATABASE')
+        os.environ['JOURNAL_DATABASE'] = path
+        app = importlib.import_module('app').app
+        previous_config = app.config['DATABASE']
+        app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=path)
+        try:
+            client, user_id = signed_in_client(app, path)
+            page = client.get('/insights')
+            self.assertEqual(page.status_code, 200)
+            self.assertIn('Write your first entry', page.text)
+            self.assertIn('No reflections yet', page.text)
+            self.assertIn('0.0%', page.text)
+            self.assertIn('aria-current="page"', page.text)
+            response = client.post('/write', data={'journal':'Body','went_well':'Win'})
+            entry_id = int(response.location.split('/entry/')[1].split('?')[0])
+            for url in ['/','/write','/history',f'/edit/{entry_id}',f'/entry/{entry_id}','/insights']:
+                result = client.get(url)
+                self.assertEqual(result.status_code, 200)
+                self.assertIn('href="/insights"', result.text)
+            page = client.get('/insights').text
+            self.assertIn('100.0%', page)
+            self.assertIn('What went well today?', page)
+            self.assertNotIn('No reflections yet', page)
+            self.assertNotIn('chart.js', page.lower())
+            with connect(path) as db:
+                stats = get_journal_stats(db, user_id=user_id)
+                self.assertEqual(stats['total_entries'], 1)
+                self.assertEqual(stats['current_streak'], 1)
+                self.assertEqual(stats['monthly_entries'], 1)
+        finally:
+            app.config['DATABASE'] = previous_config
+            if previous_env is None: os.environ.pop('JOURNAL_DATABASE', None)
+            else: os.environ['JOURNAL_DATABASE'] = previous_env
         if digest:
             self.assertEqual(hashlib.sha256(real.read_bytes()).hexdigest(), digest)

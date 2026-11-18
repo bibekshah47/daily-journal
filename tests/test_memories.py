@@ -11,31 +11,28 @@ from unittest import mock
 from database import connect, initialize_database
 from memories import get_memories, subtract_months
 from tags import set_entry_tags
-from tests.helpers import SECURITY_OFF, add_user, signed_in_client
+from tests.helpers import SECURITY_OFF, add_user, new_test_database, signed_in_client
 
 TODAY = date(2026, 11, 16)
 
 
 class MemoryTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.path = str(Path(self.tmp.name) / 'journal.db')
-        initialize_database(self.path)
+        self.path = new_test_database(self)
         self.user_id = add_user(self.path)
         self.db = connect(self.path)
 
     def tearDown(self):
         self.db.close()
-        self.tmp.cleanup()
 
     def add(self, day, time='09:00:00', title=None, content='Words', tags=()):
-        cursor = self.db.execute(
+        cursor = self.db.insert(
             'INSERT INTO entries (title, content, mood, created_at, user_id) VALUES (?, ?, ?, ?, ?)',
             (title, content, 'Happy', f'{day.isoformat()}T{time}', self.user_id))
         if tags:
-            set_entry_tags(self.db, cursor.lastrowid, tags, user_id=self.user_id)
+            set_entry_tags(self.db, cursor, tags, user_id=self.user_id)
         self.db.commit()
-        return cursor.lastrowid
+        return cursor
 
     def memories(self, today=TODAY, limit=10):
         return [(m['label'], m['entry']['id']) for m in get_memories(self.db, today, limit, user_id=self.user_id)]
@@ -160,24 +157,19 @@ class HomeMemoryTests(unittest.TestCase):
             assert hashlib.sha256(cls.real.read_bytes()).hexdigest() == cls.digest
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.path = str(Path(self.tmp.name) / 'journal.db')
-        initialize_database(self.path)
+        self.path = new_test_database(self)
         self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=self.path)
         self.client, self.user_id = signed_in_client(self.app, self.path)
-
-    def tearDown(self):
-        self.tmp.cleanup()
 
     def add(self, created_at, title, tags=()):
         db = connect(self.path)
         try:
-            cursor = db.execute(
+            entry_id = db.insert(
                 "INSERT INTO entries (title, content, mood, created_at, user_id) "
                 "VALUES (?, 'A long walk', 'Sad', ?, ?)", (title, created_at, self.user_id))
-            set_entry_tags(db, cursor.lastrowid, tags, user_id=self.user_id)
+            set_entry_tags(db, entry_id, tags, user_id=self.user_id)
             db.commit()
-            return cursor.lastrowid
+            return entry_id
         finally:
             db.close()
 

@@ -3,16 +3,16 @@ from datetime import date
 import importlib
 import os
 from pathlib import Path
-import sqlite3
-import tempfile
 import unittest
 
 from flask import g
 
 import config
 from config import ConfigError, DEFAULT_SECRET_KEY, load_config
-from database import initialize_database
-from tests.helpers import SECURITY_OFF, signed_in_client
+from database import is_postgres
+from tests.helpers import POSTGRES, SECURITY_OFF, new_test_database, signed_in_client
+
+NEON = 'postgresql://user:pw@ep-cool-name.eu-central-1.aws.neon.tech/journal?sslmode=require'
 
 
 class ConfigTests(unittest.TestCase):
@@ -25,10 +25,26 @@ class ConfigTests(unittest.TestCase):
 
     def test_values_from_the_environment(self):
         settings = load_config({'APP_ENV': ' Production ', 'SECRET_KEY': 'a' * 64,
-                                'DATABASE': '/data/journal.db'})
+                                'DATABASE_URL': f'  {NEON} '})
         self.assertEqual(settings['APP_ENV'], 'production')
         self.assertEqual(settings['SECRET_KEY'], 'a' * 64)
-        self.assertEqual(settings['DATABASE'], '/data/journal.db')
+        self.assertEqual(settings['DATABASE'], NEON)
+        self.assertEqual(load_config({'DATABASE': '/data/journal.db'})['DATABASE'], '/data/journal.db')
+
+    def test_database_url_chooses_postgresql(self):
+        for url in (NEON, 'postgres://u@localhost/journal'):
+            with self.subTest(url=url):
+                settings = load_config({'DATABASE_URL': url, 'DATABASE': 'ignored.db'})
+                self.assertEqual(settings['DATABASE'], url)
+                self.assertTrue(is_postgres(settings['DATABASE']))
+        self.assertFalse(is_postgres(load_config({'DATABASE_URL': '  '})['DATABASE']))
+        with self.assertRaisesRegex(ConfigError, 'DATABASE_URL must start with postgres'):
+            load_config({'DATABASE_URL': 'mysql://u@localhost/journal'})
+
+    def test_production_refuses_to_start_without_database_url(self):
+        with self.assertRaisesRegex(ConfigError, 'DATABASE_URL must be set in production'):
+            load_config({'APP_ENV': 'production', 'SECRET_KEY': 'a' * 64,
+                         'DATABASE': '/data/journal.db'})
 
     def test_database_falls_back_to_journal_database(self):
         self.assertEqual(load_config({'JOURNAL_DATABASE': 'old.db'})['DATABASE'], 'old.db')
@@ -53,16 +69,24 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, 'APP_ENV'):
             load_config({'APP_ENV': 'staging'})
 
-    def test_create_app_refuses_to_start_in_production_without_a_key(self):
+    def test_create_app_refuses_to_start_in_production_without_a_key_or_database(self):
         module = importlib.import_module('app')
-        saved = {name: os.environ.get(name) for name in ('APP_ENV', 'SECRET_KEY')}
+        names = ('APP_ENV', 'SECRET_KEY', 'DATABASE_URL')
+        saved = {name: os.environ.get(name) for name in names}
         try:
             os.environ['APP_ENV'] = 'production'
+            os.environ['DATABASE_URL'] = NEON
             os.environ.pop('SECRET_KEY', None)
-            with self.assertRaises(ConfigError):
+            with self.assertRaisesRegex(ConfigError, 'SECRET_KEY'):
                 module.create_app()
             os.environ['SECRET_KEY'] = 'b' * 64
-            self.assertEqual(module.create_app().config['APP_ENV'], 'production')
+            os.environ['DATABASE_URL'] = ''
+            with self.assertRaisesRegex(ConfigError, 'DATABASE_URL'):
+                module.create_app()
+            # Both set: it starts. (A test database stands in for the URL.)
+            os.environ['DATABASE_URL'] = NEON
+            app = module.create_app({'DATABASE': new_test_database(self)})
+            self.assertEqual(app.config['APP_ENV'], 'production')
         finally:
             for name, value in saved.items():
                 if value is None:
@@ -72,21 +96,17 @@ class ConfigTests(unittest.TestCase):
 
     def test_env_example_lists_every_setting(self):
         example = (Path(config.__file__).parent / '.env.example').read_text()
-        for name in ('APP_ENV=', 'SECRET_KEY=', 'DATABASE='):
+        for name in ('APP_ENV=', 'SECRET_KEY=', 'DATABASE=', 'DATABASE_URL=', 'TEST_DATABASE_URL='):
             self.assertIn(name, example)
 
 
 class RequestConnectionTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.path = str(Path(self.tmp.name) / 'journal.db')
-        initialize_database(self.path)
+        self.path = new_test_database(self)
         module = importlib.import_module('app')
         self.app = module.create_app({'TESTING': True, 'DATABASE': self.path, **SECURITY_OFF})
-        module._daily_backups_checked.add((os.path.abspath(self.path), date.today()))
-
-    def tearDown(self):
-        self.tmp.cleanup()
+        module._daily_backups_checked.add((self.path if POSTGRES else os.path.abspath(self.path),
+                                           date.today()))
 
     def test_one_connection_per_request_closed_at_the_end(self):
         from db import get_db
@@ -94,9 +114,13 @@ class RequestConnectionTests(unittest.TestCase):
             connection = get_db()
             self.assertIs(get_db(), connection)
             self.assertIs(g.db, connection)
-            self.assertIs(connection.row_factory, sqlite3.Row)
-            self.assertEqual(connection.execute('PRAGMA foreign_keys').fetchone()[0], 1)
-        with self.assertRaises(sqlite3.ProgrammingError):   # closed by teardown
+            self.assertEqual(connection.backend, 'postgres' if POSTGRES else 'sqlite')
+            row = connection.fetchone('SELECT 1 AS one, 2 AS two')
+            self.assertEqual((row[0], row['two'], dict(row)), (1, 2, {'one': 1, 'two': 2}))
+            self.assertEqual(row, (1, 2))
+            if not POSTGRES:
+                self.assertEqual(connection.fetchone('PRAGMA foreign_keys')[0], 1)
+        with self.assertRaises(Exception):   # closed by teardown
             connection.execute('SELECT 1')
         with self.app.app_context():
             self.assertIsNot(get_db(), connection)

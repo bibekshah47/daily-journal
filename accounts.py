@@ -5,10 +5,11 @@ never stored, logged or echoed back into a page.
 """
 from datetime import datetime
 import re
-import sqlite3
 
 from itsdangerous import BadData, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
+
+from database import IntegrityError
 
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 128
@@ -82,13 +83,13 @@ def create_user(connection, email, password, display_name=None, now=None):
     """
     created = (now or datetime.now()).isoformat()
     try:
-        cursor = connection.execute(
+        return connection.insert(
             "INSERT INTO users (email, password_hash, created_at, display_name, password_changed_at) "
             "VALUES (?, ?, ?, ?, ?)",
             (email, generate_password_hash(password), created, display_name, created))
-    except sqlite3.IntegrityError as error:
+    except IntegrityError as error:
+        # On PostgreSQL the transaction is now aborted: the caller rolls back.
         raise EmailTaken(email) from error
-    return cursor.lastrowid
 
 
 def find_user(connection, user_id):
@@ -147,7 +148,7 @@ def change_email(connection, user_id, email):
     try:
         with connection:
             connection.execute("UPDATE users SET email = ? WHERE id = ?", (email, user_id))
-    except sqlite3.IntegrityError as error:
+    except IntegrityError as error:
         raise EmailTaken(email) from error
 
 
@@ -181,7 +182,6 @@ def delete_user(connection, user_id):
     schemas.
     """
     with connection:
-        connection.execute("BEGIN IMMEDIATE")
         connection.execute("DELETE FROM entries WHERE user_id = ?", (user_id,))
         connection.execute("DELETE FROM tags WHERE user_id = ?", (user_id,))
         connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
@@ -224,7 +224,6 @@ def assign_unowned(connection, user_id):
     Returns (entries moved, tags moved). Commits.
     """
     with connection:
-        connection.execute("BEGIN IMMEDIATE")
         clashes = connection.execute("""
             SELECT old.id, mine.id FROM tags AS old
             JOIN tags AS mine ON mine.name = old.name AND mine.user_id = ?
@@ -232,8 +231,9 @@ def assign_unowned(connection, user_id):
         """, (user_id,)).fetchall()
         for old_id, mine_id in clashes:
             connection.execute(
-                "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) "
-                "SELECT entry_id, ? FROM entry_tags WHERE tag_id = ?", (mine_id, old_id))
+                "INSERT INTO entry_tags (entry_id, tag_id, sort_order) "
+                "SELECT entry_id, ?, sort_order FROM entry_tags WHERE tag_id = ? "
+                "ON CONFLICT DO NOTHING", (mine_id, old_id))
             connection.execute(
                 "DELETE FROM tags WHERE id = ? AND user_id IS NULL", (old_id,))
         tags = connection.execute(

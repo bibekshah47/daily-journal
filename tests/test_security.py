@@ -10,7 +10,7 @@ from unittest import mock
 from config import load_config
 from database import connect, initialize_database
 import security
-from tests.helpers import TEST_EMAIL, TEST_PASSWORD, add_user, log_in_as
+from tests.helpers import TEST_EMAIL, TEST_PASSWORD, add_user, log_in_as, new_test_database, skip_daily_maintenance
 
 TEMPLATES = Path(__file__).resolve().parent.parent / 'templates'
 SECRET = 'test-secret-' + 'x' * 40
@@ -23,15 +23,11 @@ class SecurityTestCase(unittest.TestCase):
 
     def setUp(self):
         import app as module
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.path = os.path.join(self.tmp.name, 'journal.db')
-        initialize_database(self.path)
+        self.path = new_test_database(self)
         self.app = module.create_app({'TESTING': True, 'DATABASE': self.path,
                                       'SECRET_KEY': SECRET, **self.overrides})
         # The daily backup hook would otherwise copy the database on the first request.
-        today = datetime.now().date()
-        module._daily_backups_checked.add((os.path.abspath(self.path), today))
+        skip_daily_maintenance(module, self.path)
         security.limiter.reset()
         self.user_id = add_user(self.path)
         self.client = self.app.test_client()
@@ -255,16 +251,16 @@ class HeaderTests(SecurityTestCase):
         super().setUp()
         db = connect(self.path)
         now = datetime.now().isoformat()
-        cursor = db.execute(
+        entry_id = db.insert(
             'INSERT INTO entries (title, content, mood, created_at, user_id) VALUES (?, ?, ?, ?, ?)',
             ('Day', 'Text', 'Happy', now, self.user_id))
-        trashed = db.execute(
+        trashed = db.insert(
             'INSERT INTO entries (title, content, mood, created_at, deleted_at, user_id) '
             'VALUES (?, ?, ?, ?, ?, ?)', ('Old', 'Text', 'Sad', now, now, self.user_id))
         db.commit()
         db.close()
-        self.entry_id = cursor.lastrowid
-        self.trashed_id = trashed.lastrowid
+        self.entry_id = entry_id
+        self.trashed_id = trashed
 
     def check_headers(self, response, production=False):
         headers = response.headers
@@ -348,7 +344,10 @@ class TemplateScanTests(unittest.TestCase):
 
 
 class ProductionConfigTests(unittest.TestCase):
-    PRODUCTION = {'APP_ENV': 'production', 'SECRET_KEY': SECRET}
+    # Production needs a PostgreSQL URL. These tests never connect to it:
+    # make_app points the app at a test database instead.
+    PRODUCTION = {'APP_ENV': 'production', 'SECRET_KEY': SECRET,
+                  'DATABASE_URL': 'postgresql://user:pw@db.example.com/journal'}
 
     def test_production_cookies_are_secure(self):
         settings = load_config(self.PRODUCTION)
@@ -373,15 +372,13 @@ class ProductionConfigTests(unittest.TestCase):
 
     def make_app(self, environ):
         import app as module
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        environ = {**environ, 'DATABASE': os.path.join(tmp.name, 'journal.db')}
         with mock.patch.dict(os.environ, environ, clear=False):
             for name in ('APP_ENV', 'SECRET_KEY'):
                 if name not in environ:
                     os.environ.pop(name, None)
-            application = module.create_app({'TESTING': True})
-        initialize_database(application.config['DATABASE'])
+            # The config is read from the environment; the data lives in a test database.
+            application = module.create_app({'TESTING': True,
+                                             'DATABASE': new_test_database(self)})
         return application
 
     def test_production_sends_hsts_and_secure_cookies(self):

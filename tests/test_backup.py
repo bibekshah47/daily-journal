@@ -6,14 +6,13 @@ import io
 import json
 import os
 from pathlib import Path
-import sqlite3
 import tempfile
 import unittest
 from unittest import mock
 
-from database import initialize_database
+from database import connect
 import backup
-from tests.helpers import SECURITY_OFF, add_user, log_in_as
+from tests.helpers import SECURITY_OFF, add_user, log_in_as, new_test_database, sqlite_only
 
 
 ENTRIES = [
@@ -53,13 +52,10 @@ class BackupTests(unittest.TestCase):
     # ---------- helpers ----------
 
     def new_database(self, name, rows=()):
-        folder = Path(self.tmp.name) / name.replace('.db', '')
-        folder.mkdir()
-        path = str(folder / name)
-        initialize_database(path)
+        path = new_test_database(self, name)
         # Every test database has one user (id 1), who owns the entries.
         self.user_id = add_user(path)
-        with sqlite3.connect(path) as db:
+        with connect(path) as db:
             db.executemany(
                 'INSERT INTO entries (title, content, mood, created_at, content_html, '
                 'is_favorite, went_well, went_wrong, improve_tomorrow, user_id) '
@@ -74,8 +70,7 @@ class BackupTests(unittest.TestCase):
         log_in_as(self.client, 1)
 
     def rows(self, path):
-        with sqlite3.connect(path) as db:
-            db.row_factory = sqlite3.Row
+        with connect(path) as db:
             result = [dict(row) for row in db.execute('SELECT * FROM entries ORDER BY id')]
         db.close()
         return result
@@ -128,8 +123,8 @@ class BackupTests(unittest.TestCase):
         self.assertIn('exported_at', payload)
         self.assertEqual(len(payload['entries']), 3)
         self.assertEqual(payload['entries'][0]['title'], 'Late night')
-        db = sqlite3.connect(self.path)
-        columns = {row[1] for row in db.execute('PRAGMA table_info(entries)')}
+        with connect(self.path) as db:
+            columns = set(db.fetchone('SELECT * FROM entries').keys())
         db.close()
         for entry in payload['entries']:
             # Exports only hold entries outside Trash, so deleted_at is left out,
@@ -219,6 +214,7 @@ class BackupTests(unittest.TestCase):
 
     # ---------- automatic daily backups ----------
 
+    @sqlite_only
     def test_daily_backup_created_once_and_pruned_to_14(self):
         folder = backup.backup_folder(self.path)
         self.assertEqual(folder, Path(self.path).resolve().parent / 'backups')
@@ -241,6 +237,7 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(names[0], 'journal-2026-11-01.db')
         self.assertTrue((folder / 'notes.txt').exists())
 
+    @sqlite_only
     def test_first_request_makes_backup_and_failures_never_break_pages(self):
         self.module._daily_backups_checked.clear()
         self.assertEqual(self.client.get('/').status_code, 200)

@@ -1,14 +1,14 @@
 """Run with: python -m unittest discover -s tests -v (temporary databases only)."""
 import hashlib
 import importlib
-import os
 from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
 
-from database import initialize_database
-from tests.helpers import SECURITY_OFF, TEST_EMAIL, add_user, log_in_as, signed_in_client
+from database import connect, initialize_database
+from tests.helpers import (SECURITY_OFF, TEST_EMAIL, add_user, log_in_as, new_test_database,
+                           signed_in_client, sqlite_only)
 from rich_text import clean_html, prepare_content
 
 
@@ -16,33 +16,23 @@ class RichTextTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
-        cls.path = str(Path(cls.tmp.name) / 'journal.db')
         cls.real = Path('journal.db')
         cls.digest = hashlib.sha256(cls.real.read_bytes()).hexdigest() if cls.real.exists() else None
-        cls.old_env = os.environ.get('JOURNAL_DATABASE')
-        os.environ['JOURNAL_DATABASE'] = cls.path
         cls.module = importlib.import_module('app')
-        cls.module.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=cls.path)
 
     @classmethod
     def tearDownClass(cls):
         if cls.digest:
             assert hashlib.sha256(cls.real.read_bytes()).hexdigest() == cls.digest
-        if cls.old_env is None:
-            os.environ.pop('JOURNAL_DATABASE', None)
-        else:
-            os.environ['JOURNAL_DATABASE'] = cls.old_env
         cls.tmp.cleanup()
 
     def setUp(self):
-        if Path(self.path).exists():
-            Path(self.path).unlink()
-        initialize_database(self.path)
+        self.path = new_test_database(self)
+        self.module.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=self.path)
         self.client, self.user_id = signed_in_client(self.module.app, self.path)
 
     def row(self, entry_id):
-        with sqlite3.connect(self.path) as db:
-            db.row_factory = sqlite3.Row
+        with connect(self.path) as db:
             return dict(db.execute('SELECT * FROM entries WHERE id=?', (entry_id,)).fetchone())
 
     def create(self, **fields):
@@ -50,6 +40,7 @@ class RichTextTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         return int(response.location.split('/entry/')[1].split('?')[0])
 
+    @sqlite_only
     def test_explicit_repeatable_migration_preserves_legacy(self):
         legacy = str(Path(self.tmp.name) / 'legacy.db')
         with sqlite3.connect(legacy) as db:
@@ -61,7 +52,8 @@ class RichTextTests(unittest.TestCase):
             row = db.execute('SELECT content,content_html,is_favorite FROM entries WHERE id=8').fetchone()
         self.assertEqual(row, ('<b>literal</b>\nnext', None, 1))
 
-    def test_request_migrates_before_save_and_preserves_all_existing_fields(self):
+    @sqlite_only
+    def test_startup_migrates_before_save_and_preserves_all_existing_fields(self):
         legacy = str(Path(self.tmp.name) / 'request-legacy.db')
         original = (7, 'Existing body', '2026-11-13T09:00:00', 'Happy',
                     'Existing title', 1, 'Win', 'Challenge', 'Plan', 'Custom value')
@@ -72,42 +64,37 @@ class RichTextTests(unittest.TestCase):
                 went_well TEXT, went_wrong TEXT, improve_tomorrow TEXT, custom_column TEXT
             )""")
             db.execute('INSERT INTO entries VALUES (?,?,?,?,?,?,?,?,?,?)', original)
-        app = self.module.app
-        previous = app.config['DATABASE']
-        app.config['DATABASE'] = legacy
-        try:
-            # No manual initializer: the first request must migrate (adding the
-            # users table) before anything reads or writes.
-            client = app.test_client()
-            self.assertEqual(client.get('/login').status_code, 200)
-            log_in_as(client, add_user(legacy))
-            response = client.post('/write', data={
-                'editor_format': 'html', 'journal_html': '<p><strong>New</strong></p>'})
-            self.assertEqual(response.status_code, 302)
-            # Entry 7 is from before accounts: nobody's until it is claimed.
-            self.assertEqual(client.get('/entry/7').status_code, 404)
-            result = app.test_cli_runner().invoke(args=['assign-entries', '--email', TEST_EMAIL])
-            self.assertEqual(result.exit_code, 0, result.output)
-            self.assertIn('Assigned 1 entry and 0 tags', result.output)
-            self.client = client
-            self.assertEqual(self.client.get('/entry/7').status_code, 200)
-            self.assertEqual(self.client.get('/edit/7').status_code, 200)
-            self.assertEqual(self.client.get('/history?favorites=1').status_code, 200)
-            with sqlite3.connect(legacy) as db:
-                columns = {row[1]: row[2] for row in db.execute('PRAGMA table_info(entries)')}
-                self.assertEqual(columns['content_html'], 'TEXT')
-                preserved = db.execute("""SELECT id,content,created_at,mood,title,is_favorite,
-                    went_well,went_wrong,improve_tomorrow,custom_column
-                    FROM entries WHERE id=7""").fetchone()
-                self.assertEqual(db.execute('SELECT user_id FROM entries WHERE id=7').fetchone()[0], 1)
-                self.assertEqual(preserved, original)
-                self.assertIsNone(db.execute('SELECT content_html FROM entries WHERE id=7').fetchone()[0])
-                self.assertEqual(db.execute('SELECT COUNT(*) FROM entries').fetchone()[0], 2)
-            # CLI reuses the same migration and is safe after repeated requests.
-            result = app.test_cli_runner().invoke(args=['init-db'])
-            self.assertEqual(result.exit_code, 0, result.output)
-        finally:
-            app.config['DATABASE'] = previous
+        # No manual initializer: starting the app migrates the file (adding
+        # the users table) before any request reads or writes.
+        app = self.module.create_app({'TESTING': True, **SECURITY_OFF, 'DATABASE': legacy})
+        client = app.test_client()
+        self.assertEqual(client.get('/login').status_code, 200)
+        log_in_as(client, add_user(legacy))
+        response = client.post('/write', data={
+            'editor_format': 'html', 'journal_html': '<p><strong>New</strong></p>'})
+        self.assertEqual(response.status_code, 302)
+        # Entry 7 is from before accounts: nobody's until it is claimed.
+        self.assertEqual(client.get('/entry/7').status_code, 404)
+        result = app.test_cli_runner().invoke(args=['assign-entries', '--email', TEST_EMAIL])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn('Assigned 1 entry and 0 tags', result.output)
+        self.client = client
+        self.assertEqual(self.client.get('/entry/7').status_code, 200)
+        self.assertEqual(self.client.get('/edit/7').status_code, 200)
+        self.assertEqual(self.client.get('/history?favorites=1').status_code, 200)
+        with sqlite3.connect(legacy) as db:
+            columns = {row[1]: row[2] for row in db.execute('PRAGMA table_info(entries)')}
+            self.assertEqual(columns['content_html'], 'TEXT')
+            preserved = db.execute("""SELECT id,content,created_at,mood,title,is_favorite,
+                went_well,went_wrong,improve_tomorrow,custom_column
+                FROM entries WHERE id=7""").fetchone()
+            self.assertEqual(db.execute('SELECT user_id FROM entries WHERE id=7').fetchone()[0], 1)
+            self.assertEqual(preserved, original)
+            self.assertIsNone(db.execute('SELECT content_html FROM entries WHERE id=7').fetchone()[0])
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM entries').fetchone()[0], 2)
+        # CLI reuses the same migration and is safe after repeated requests.
+        result = app.test_cli_runner().invoke(args=['init-db'])
+        self.assertEqual(result.exit_code, 0, result.output)
 
     def test_legacy_literal_text(self):
         entry_id = self.create(journal='<b>literal</b>\nnext')
@@ -143,7 +130,7 @@ class RichTextTests(unittest.TestCase):
         html = self.row(entry_id)['content_html']
         for bad in ['onclick','onerror','javascript:','<script','<img','style=']:
             self.assertNotIn(bad, html)
-        with sqlite3.connect(self.path) as db:
+        with connect(self.path) as db:
             db.execute('UPDATE entries SET content_html=? WHERE id=?',(dangerous,entry_id))
         page = self.client.get(f'/entry/{entry_id}').text
         self.assertNotIn('onclick=',page)

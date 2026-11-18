@@ -59,10 +59,10 @@ def history():
     # Dates that contain journal entries, with the mood of the latest one
     calendar_moods = {}
     for row in connection.execute("""
-        SELECT date(created_at) AS entry_date, mood
+        SELECT substr(created_at, 1, 10) AS entry_date, mood
         FROM live_entries
         WHERE user_id = ?
-        ORDER BY created_at
+        ORDER BY created_at, id
     """, (me,)).fetchall():
         calendar_moods[row["entry_date"]] = row["mood"] or ""
     calendar_entry_dates = set(calendar_moods)
@@ -75,10 +75,11 @@ def history():
         query += " AND is_favorite = 1"
 
     if search_query:
-        query += """ AND (title LIKE ? OR content LIKE ? OR id IN (
+        # LOWER on both sides: PostgreSQL's LIKE is case-sensitive.
+        query += """ AND (LOWER(title) LIKE LOWER(?) OR LOWER(content) LIKE LOWER(?) OR id IN (
             SELECT entry_tags.entry_id FROM entry_tags
             JOIN tags ON tags.id = entry_tags.tag_id
-            WHERE tags.user_id = ? AND tags.name LIKE ?))"""
+            WHERE tags.user_id = ? AND LOWER(tags.name) LIKE LOWER(?)))"""
         keyword = f"%{search_query}%"
         # "#work" should find the tag "work".
         tag_keyword = f"%{search_query.lstrip('#')}%"
@@ -92,7 +93,7 @@ def history():
         parameters.extend([me, active_tag])
 
     if filter_date:
-        query += " AND date(created_at) = ?"
+        query += " AND substr(created_at, 1, 10) = ?"
         parameters.append(filter_date)
 
     query += " ORDER BY created_at DESC, id DESC"

@@ -10,7 +10,7 @@ from backup import (RestoreError, entries_to_json, entries_to_markdown,
                     latest_backup_time, parse_backup, restore_entries,
                     restore_message)
 from config import MAX_UPLOAD_MB
-from db import get_db
+from db import get_db, uses_postgres
 from tags import get_tags_for_entries
 from views.shared import user_id
 
@@ -21,12 +21,15 @@ def render_backup_page(error=None, status=200):
     total, oldest, newest = get_db().execute(
         "SELECT COUNT(*), MIN(created_at), MAX(created_at) FROM live_entries WHERE user_id = ?",
         (user_id(),)).fetchone()
-    try:
-        # The daily backup copies the whole database on the server. Its time
-        # is shown, never its location.
-        last_backup = latest_backup_time(current_app.config["DATABASE"])
-    except OSError:
-        last_backup = None
+    # The daily backup copies the SQLite file on the server (never shown: only
+    # its time). PostgreSQL has no such copies.
+    file_backups = not uses_postgres()
+    last_backup = None
+    if file_backups:
+        try:
+            last_backup = latest_backup_time(current_app.config["DATABASE"])
+        except OSError:
+            last_backup = None
     return render_template(
         "backup.html",
         error=error,
@@ -34,6 +37,7 @@ def render_backup_page(error=None, status=200):
         oldest_entry=oldest,
         newest_entry=newest,
         last_backup=last_backup,
+        file_backups=file_backups,
         max_upload_mb=MAX_UPLOAD_MB,
     ), status
 

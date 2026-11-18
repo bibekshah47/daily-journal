@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 from database import connect, initialize_database
 from memories import subtract_months
 from tags import set_entry_tags
-from tests.helpers import SECURITY_OFF, TEST_PASSWORD, add_user, log_in_as, signed_in_client
+from tests.helpers import SECURITY_OFF, TEST_PASSWORD, add_user, log_in_as, new_test_database, signed_in_client, skip_daily_maintenance, sqlite_only
 
 
 def login_target(location):
@@ -42,16 +42,11 @@ class AuthTestCase(unittest.TestCase):
             assert hashlib.sha256(cls.real.read_bytes()).hexdigest() == cls.digest
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.path = str(Path(self.tmp.name) / 'journal.db')
-        initialize_database(self.path)
+        self.path = new_test_database(self)
         self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=self.path)
         self.client = self.app.test_client()
         # Skip the once-a-day backup/cleanup hook.
-        self.module._daily_backups_checked.add((os.path.abspath(self.path), date.today()))
-
-    def tearDown(self):
-        self.tmp.cleanup()
+        skip_daily_maintenance(self.module, self.path, date.today())
 
     def query(self, sql, *params):
         db = connect(self.path)
@@ -340,6 +335,7 @@ class DisplayNameTests(AuthTestCase):
         self.assertNotIn('<script>alert(2)', error_page)
         self.assertIn('value="&#34;&gt;&lt;script&gt;alert(2)&lt;/script&gt;"', error_page)
 
+    @sqlite_only
     def test_existing_users_keep_working_with_no_name(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / 'old.db')
@@ -416,13 +412,13 @@ class IsolationTests(AuthTestCase):
     def add(self, user_id, created_at, content, mood, tags, favorite=0, went_well=None, deleted_at=None):
         db = connect(self.path)
         try:
-            cursor = db.execute(
+            entry_id = db.insert(
                 'INSERT INTO entries (user_id, title, content, mood, created_at, is_favorite, went_well, deleted_at) '
                 'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                 (user_id, content + ' title', content, mood, created_at, favorite, went_well, deleted_at))
-            set_entry_tags(db, cursor.lastrowid, tags, user_id=user_id)
+            set_entry_tags(db, entry_id, tags, user_id=user_id)
             db.commit()
-            return cursor.lastrowid
+            return entry_id
         finally:
             db.close()
 
@@ -600,17 +596,17 @@ class AssignEntriesTests(AuthTestCase):
         db = connect(self.path)
         try:
             # Owner already has a "work" tag; Other has an entry of their own.
-            mine = db.execute("INSERT INTO entries (user_id, content, created_at) VALUES (?, 'Mine', '2026-11-01')",
-                              (owner,)).lastrowid
+            mine = db.insert("INSERT INTO entries (user_id, content, created_at) VALUES (?, 'Mine', '2026-11-01')",
+                              (owner,))
             set_entry_tags(db, mine, ['work'], user_id=owner)
-            theirs = db.execute("INSERT INTO entries (user_id, content, created_at) VALUES (?, 'Theirs', '2026-11-01')",
-                                (other,)).lastrowid
+            theirs = db.insert("INSERT INTO entries (user_id, content, created_at) VALUES (?, 'Theirs', '2026-11-01')",
+                                (other,))
             set_entry_tags(db, theirs, ['old'], user_id=other)
             # Two entries from before accounts, with tags of their own.
-            old_ids = [db.execute("INSERT INTO entries (content, created_at) VALUES (?, '2026-01-01')",
-                                  (text,)).lastrowid for text in ('Old one', 'Old two')]
+            old_ids = [db.insert("INSERT INTO entries (content, created_at) VALUES (?, '2026-01-01')",
+                                  (text,)) for text in ('Old one', 'Old two')]
             db.execute("INSERT INTO tags (id, user_id, name) VALUES (100, NULL, 'work'), (101, NULL, 'old')")
-            db.executemany('INSERT INTO entry_tags VALUES (?, ?)',
+            db.executemany('INSERT INTO entry_tags (entry_id, tag_id) VALUES (?, ?)',
                            [(old_ids[0], 100), (old_ids[1], 100), (old_ids[1], 101)])
             db.commit()
         finally:
@@ -649,6 +645,7 @@ class AssignEntriesTests(AuthTestCase):
         self.assertEqual(self.query('SELECT user_id FROM entries'), [(None,)])
 
 
+@sqlite_only
 class UpgradeTests(unittest.TestCase):
     def test_tags_become_per_user_keeping_ids_and_links(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -673,8 +670,12 @@ class UpgradeTests(unittest.TestCase):
             try:
                 self.assertEqual(db.execute('SELECT id, user_id, name FROM tags ORDER BY id').fetchall(),
                                  [(7, None, 'work'), (9, None, 'home')])
-                self.assertEqual(db.execute('SELECT * FROM entry_tags ORDER BY entry_id, tag_id').fetchall(),
+                self.assertEqual(db.execute('SELECT entry_id, tag_id FROM entry_tags '
+                                            'ORDER BY entry_id, tag_id').fetchall(),
                                  [(1, 7), (2, 7), (2, 9)])
+                # Migration 2 keeps the order the links were made in.
+                self.assertEqual(db.execute('SELECT tag_id FROM entry_tags WHERE entry_id = 2 '
+                                            'ORDER BY sort_order').fetchall(), [(7,), (9,)])
                 self.assertEqual(db.execute('SELECT user_id FROM entries').fetchall(), [(None,), (None,)])
                 self.assertIn('UNIQUE (user_id, name)',
                               db.execute("SELECT sql FROM sqlite_master WHERE name = 'tags'").fetchone()[0])

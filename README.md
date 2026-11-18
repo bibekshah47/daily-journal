@@ -11,9 +11,9 @@ Mood names, emoji and colors are defined once in `MOODS` in `views/shared.py`.
 
 | File | What it does |
 | --- | --- |
-| `app.py` | Creates the app (`create_app()`), registers the blueprints, runs the schema check and the daily backup before requests |
+| `app.py` | Creates the app (`create_app()`), runs pending migrations at startup, registers the blueprints and CLI commands, runs the daily backup |
 | `config.py` | Reads settings from environment variables and `.env` |
-| `db.py` | `get_db()`: one SQLite connection per request, closed automatically |
+| `db.py` | `get_db()`: one database connection per request, closed automatically |
 | `views/entries.py` | Home, Write, Edit, an entry, favorites, delete/restore, Trash |
 | `views/history.py` | History calendar, search and filters |
 | `views/insights.py` | Insights and the weekly review |
@@ -23,12 +23,14 @@ Mood names, emoji and colors are defined once in `MOODS` in `views/shared.py`.
 | `accounts.py` | Email and password rules, password hashing, reset tokens, claiming old entries |
 | `security.py` | CSRF, rate limits, login lockout, security headers |
 | `mailer.py` | Sends email (printed to the terminal in development) |
-| `database.py` | Creates and upgrades the schema |
+| `database.py` | Connections to SQLite or PostgreSQL behind one API, and `?` placeholder conversion |
+| `migrations.py` | Numbered schema migrations for both databases |
+| `copy_to_postgres.py` | The `copy-sqlite-to-postgres` command |
 | `backup.py`, `tags.py`, `memories.py`, `weekly.py`, `journal_insights.py`, `trash.py` | Logic and SQL; each function takes a connection and the user's id |
 
 Routes get their connection from `get_db()` and pass it to the helper modules,
-which never open their own. The only exceptions are schema setup (`database.py`)
-and the file copies made for daily backups (`backup.py`).
+which never open their own. The only exceptions are migrations (`migrations.py`),
+the SQLite file copies made for daily backups (`backup.py`), and the copy command.
 Every query passes values as `?` parameters.
 
 ## Accounts and privacy
@@ -83,7 +85,7 @@ they rotate out.
 
 ### Upgrading a journal from before accounts
 
-The upgrade runs by itself (or with `init-db`) and keeps every entry, but
+The upgrade runs by itself when the app starts (or with `init-db`) and keeps every entry, but
 entries written before accounts have no owner, so nobody sees them until they
 are claimed. Sign up in the app, then run:
 
@@ -117,21 +119,73 @@ for local use:
 | --- | --- | --- |
 | `APP_ENV` | `development` | `development` or `production` |
 | `SECRET_KEY` | a fixed development key | Signs the session cookie ("Entry saved." messages, and logins later) |
-| `DATABASE` | `journal.db` | Path to the SQLite file. The older `JOURNAL_DATABASE` name still works |
+| `DATABASE` | `journal.db` | Path to the SQLite file (local development). The older `JOURNAL_DATABASE` name still works |
+| `DATABASE_URL` | empty | A PostgreSQL connection string (`postgres://` or `postgresql://`). When set, it is used instead of `DATABASE`. Required in production |
+| `TEST_DATABASE_URL` | empty | Optional: a throwaway PostgreSQL database for running the tests against PostgreSQL |
 | `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | empty, `587` | SMTP (STARTTLS) for reset emails. Without `MAIL_SERVER`, or in development, emails are printed to the terminal |
 | `TRUSTED_HOSTS` | empty | Production: the host name(s) the site is served at, comma-separated. Stops forged links in reset emails |
 
 Variables set in your shell take priority over `.env`. In production
 (`APP_ENV=production`) the app refuses to start unless `SECRET_KEY` is set to a
-real secret. Generate one with:
+real secret and `DATABASE_URL` points at PostgreSQL. Generate a secret with:
 
 ```sh
 .venv/bin/python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-The `init-db` command adds missing columns without replacing existing rows. The same
-upgrade also runs before each request, so routes never use an outdated schema.
-Importing the app does not upgrade the database.
+## Databases: SQLite locally, PostgreSQL in production
+
+With no `DATABASE_URL`, the app uses the SQLite file at `DATABASE` (`journal.db`).
+That is all local development and the default test run need.
+
+In production, set `DATABASE_URL` to a PostgreSQL connection string. For
+[Neon](https://neon.tech): open your project, click **Connect**, and copy the
+connection string. Put it in your host's environment settings (on Render: the
+service's **Environment** tab), never in `.env.example` or anything else git tracks:
+
+```
+DATABASE_URL=postgresql://USER:PASSWORD@ep-example-123456-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require
+```
+
+Neon's pooled (`-pooler`) string is fine for the app. To try PostgreSQL locally,
+put the same line in `.env`.
+
+The app is written once for both databases. `database.py` gives every module
+the same small API (`execute`, `fetchone`, `fetchall`, `insert` returning the new
+id) and turns `?` placeholders into `%s` for PostgreSQL. SQL stays portable:
+`INSERT ... RETURNING id` for new ids, `substr(created_at, 1, 10)` for the day
+of an ISO timestamp, `LOWER(col) LIKE LOWER(?)` for searching, and
+`ON CONFLICT DO NOTHING` instead of `INSERT OR IGNORE`. Booleans are `0`/`1` integers.
+
+### Schema and migrations
+
+`migrations.py` holds numbered migrations, each with SQL for SQLite and for
+PostgreSQL, and records the ones applied in a `schema_migrations` table. Pending
+migrations run when the app starts (never per request), and on demand:
+
+```sh
+.venv/bin/python -m flask --app app init-db
+```
+
+It works on whichever database is configured and is safe to run any number of times.
+To change the schema, add a migration with the next number; never edit one that
+has shipped. A SQLite `journal.db` from before migrations is recognized
+automatically: it is brought up to date if it is an older layout, then recorded
+as version 1, keeping every row.
+
+### Moving your SQLite journal to PostgreSQL
+
+With `DATABASE_URL` pointing at an empty PostgreSQL database:
+
+```sh
+DATABASE_URL='postgresql://...' .venv/bin/python -m flask --app app copy-sqlite-to-postgres --sqlite journal.db
+```
+
+This copies users, entries, tags and tag links in one transaction, keeping every
+id, then moves each id sequence past the highest copied id. It prints how many
+rows it copied, refuses a database that already has users or entries, and never
+changes the SQLite file. Logins and "Keep me logged in" cookies keep working,
+because user ids are unchanged.
 
 ## Running the app
 
@@ -143,8 +197,8 @@ Stop any running development server first, then:
 
 The server runs at http://127.0.0.1:5001, with Flask's debugger on in development
 and off in production. `.venv/bin/python -m flask --app app run --port 5001` works
-too. Flask's built-in server is for local use only. To deploy, set `APP_ENV=production`
-and `SECRET_KEY`, then serve `app:app` with a WSGI server such as gunicorn.
+too. Flask's built-in server is for local use only. To deploy, set `APP_ENV=production`,
+`SECRET_KEY` and `DATABASE_URL`, then serve `app:app` with a WSGI server such as gunicorn.
 
 `content` stays plain text for previews and search. `content_html` holds sanitized
 formatting and is NULL on legacy entries. Legacy content is never interpreted as
@@ -160,11 +214,17 @@ same page, into whichever account is logged in. Restoring only adds entries that
 aren't already in that account (same `created_at` and `content`); it never
 overwrites or deletes anything.
 
-On the first request each day the app also copies the whole database to
+Markdown and JSON export and JSON restore work the same on SQLite and PostgreSQL.
+
+With SQLite, on the first request each day the app also copies the whole database to
 `backups/journal-YYYY-MM-DD.db`, next to the database file, and keeps the newest 14.
 These copies hold every user's journal, so keep that folder private. The page shows
 when the last copy was made but not where it is. A failed backup is logged and
 never stops a page from loading. The `backups/` folder is ignored by git.
+
+With PostgreSQL there are no file copies and the page doesn't mention them: use
+your database host's restore history instead (Neon keeps point-in-time restore
+history for your project).
 
 ## Manual checks
 
@@ -192,6 +252,24 @@ for test in tests/*.js; do node "$test"; done
 node --check static/journal-editor.js static/write-extras.js
 ```
 
-Python tests create temporary databases and verify the real database checksum is
-unchanged. JavaScript tests use DOM/editor doubles for integration logic; real
+Python tests create a temporary SQLite database for each test and verify the real
+database checksum is unchanged. They ignore `DATABASE_URL`, so they never touch a
+real database. JavaScript tests use DOM/editor doubles for integration logic; real
 browser toolbar and visual checks are covered by the manual steps above.
+
+### Running the tests against PostgreSQL
+
+Point `TEST_DATABASE_URL` (in your shell or `.env`) at a PostgreSQL database
+you don't mind the tests writing to, such as a separate Neon branch. Use its
+**direct** connection string (without `-pooler`): each test creates its own
+schema, sets `search_path` to it, and drops it afterwards, which needs a direct
+connection. Then:
+
+```sh
+TEST_DB=postgres .venv/bin/python -m unittest discover -s tests
+```
+
+Every test runs on PostgreSQL, apart from the few about SQLite itself (file
+backups, upgrading old journal files), which are skipped. The tests for
+`copy-sqlite-to-postgres` only run in this mode. It is slower than the SQLite run,
+since every test makes its own connections and schema.

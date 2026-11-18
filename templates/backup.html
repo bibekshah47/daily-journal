@@ -17,7 +17,7 @@
 </div>
 {% endif %}
 
-<section class="stat-band" aria-label="Your journal">
+<section class="stat-band {% if not file_backups %}stat-band-3{% endif %}" aria-label="Your journal">
     <div class="stat">
         <p class="stat-value">{{ total_entries }}</p>
         <h2 class="stat-label">{{ 'Entry' if total_entries == 1 else 'Entries' }}</h2>
@@ -30,17 +30,23 @@
         <p class="stat-value">{{ newest_entry|short_date if newest_entry else '—' }}</p>
         <h2 class="stat-label">Newest entry</h2>
     </div>
+    {# Automatic file copies exist only with SQLite. A PostgreSQL host keeps
+       its own restore history, which this page doesn't show. #}
+    {% if file_backups %}
     <div class="stat">
         <p class="stat-value">{{ last_backup|short_date if last_backup else 'Not yet' }}</p>
         <h2 class="stat-label">Last automatic backup</h2>
         {% if last_backup %}<p class="stat-note">at {{ last_backup|friendly_time }}</p>{% endif %}
     </div>
+    {% endif %}
 </section>
 
+{% if file_backups %}
 <p class="backup-note">
     <i data-lucide="database-backup" aria-hidden="true"></i>
     <span>Once a day, the server also saves a backup copy automatically. The newest 14 are kept.</span>
 </p>
+{% endif %}
 
 {% if total_entries %}
 <section class="panel backup-panel" aria-labelledby="download-heading">

@@ -44,11 +44,31 @@ def database_path(environ=None):
             or DEFAULT_DATABASE)
 
 
+POSTGRES_SCHEMES = ("postgres://", "postgresql://")
+
+
+def database_target(environ=None, production=False):
+    """Where the data lives: the PostgreSQL DATABASE_URL if set, else the
+    SQLite file path. Production must use PostgreSQL."""
+    environ = os.environ if environ is None else environ
+    url = environ.get("DATABASE_URL", "").strip()
+    if url:
+        if not url.startswith(POSTGRES_SCHEMES):
+            raise ConfigError("DATABASE_URL must start with postgres:// or postgresql://.")
+        return url
+    if production:
+        raise ConfigError(
+            "DATABASE_URL must be set in production: the PostgreSQL connection "
+            "string from your database host (for example Neon).")
+    return database_path(environ)
+
+
 def load_config(environ=None):
     """Flask config values for the current environment.
 
     Raises ConfigError in production when SECRET_KEY is missing or is the
-    development default, so a deployment can't run with a guessable key.
+    development default, so a deployment can't run with a guessable key, or
+    when DATABASE_URL (PostgreSQL) is missing.
     """
     environ = os.environ if environ is None else environ
     app_env = environ.get("APP_ENV", "").strip().lower() or "development"
@@ -75,7 +95,8 @@ def load_config(environ=None):
     settings = {
         "APP_ENV": app_env,
         "SECRET_KEY": secret_key or DEFAULT_SECRET_KEY,
-        "DATABASE": database_path(environ),
+        # A SQLite file path, or a PostgreSQL URL (see database.py).
+        "DATABASE": database_target(environ, production),
         "MAX_CONTENT_LENGTH": MAX_UPLOAD_MB * 1024 * 1024,
         # Login cookies: never readable by page scripts, never sent with
         # cross-site form posts, and HTTPS-only in production.

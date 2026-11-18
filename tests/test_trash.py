@@ -18,7 +18,7 @@ from journal_insights import get_journal_stats
 from memories import get_memories, subtract_months
 from tags import all_tags_with_counts, set_entry_tags
 from trash import cleanup_trash
-from tests.helpers import SECURITY_OFF, signed_in_client
+from tests.helpers import SECURITY_OFF, new_test_database, signed_in_client, skip_daily_maintenance, sqlite_only
 
 
 class TrashTests(unittest.TestCase):
@@ -47,26 +47,21 @@ class TrashTests(unittest.TestCase):
     # ---------- helpers ----------
 
     def new_database(self, name):
-        folder = Path(self.tmp.name) / name.replace('.db', '')
-        folder.mkdir()
-        path = str(folder / name)
-        initialize_database(path)
-        return path
+        return new_test_database(self, name)
 
     def use_database(self, path):
         self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=path)
         self.client, self.user_id = signed_in_client(self.app, path)
         # Skip the once-a-day backup/cleanup hook unless a test asks for it.
-        self.module._daily_backups_checked.add((os.path.abspath(path), date.today()))
+        skip_daily_maintenance(self.module, path, date.today())
 
     def add(self, content, created_at, title=None, mood=None, tags=None, deleted_at=None):
         """Insert directly, so tests control dates."""
         db = connect(self.path)
         try:
-            cursor = db.execute(
+            entry_id = db.insert(
                 'INSERT INTO entries (title, content, mood, created_at, deleted_at, user_id) '
                 'VALUES (?, ?, ?, ?, ?, ?)', (title, content, mood, created_at, deleted_at, self.user_id))
-            entry_id = cursor.lastrowid
             if tags:
                 set_entry_tags(db, entry_id, tags, user_id=self.user_id)
             db.commit()
@@ -307,6 +302,7 @@ class TrashTests(unittest.TestCase):
         self.assertIsNone(self.deleted_at(live))
         self.assertEqual(self.query('SELECT name FROM tags'), [])
 
+    @sqlite_only
     def test_daily_hook_cleans_up_after_backup_and_never_breaks_pages(self):
         old = (datetime.now() - timedelta(days=31)).isoformat()
         expired = self.add('Expired', '2026-01-01T09:00:00', deleted_at=old)

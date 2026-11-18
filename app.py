@@ -1,8 +1,10 @@
 """My Journal: creates the Flask app and wires the pieces together.
 
-Settings come from config.py (environment variables / .env), each request
-gets one database connection from db.py, and the pages live in blueprints
-under views/:
+Settings come from config.py (environment variables / .env). The database
+is SQLite locally and PostgreSQL in production (database.py); its schema is
+brought up to date by migrations.py when the app starts. Each request gets
+one database connection from db.py, and the pages live in blueprints under
+views/:
 
     auth      /signup  /login  /logout  /forgot  /reset/<token>
               (the only pages open without logging in)
@@ -14,6 +16,7 @@ under views/:
 """
 from datetime import date, datetime
 import os
+import sys
 import threading
 
 import click
@@ -24,45 +27,50 @@ import security
 from accounts import assign_unowned, find_user_by_email
 from backup import run_daily_backup
 from config import load_config
-from database import initialize_database
+from copy_to_postgres import CopyError, copy_sqlite_to_postgres
+from database import initialize_database, is_postgres
 from trash import cleanup_trash
 from views import backup as backup_views
 from views import auth, entries, history, insights, settings
 from views.shared import register_template_helpers
 
 
-# (database path, day) pairs whose daily backup has already been handled.
+# (database, day) pairs whose daily maintenance has already been handled.
 _daily_backups_checked = set()
 _daily_backup_lock = threading.Lock()
 
 
-def ensure_database_schema():
-    """Upgrade the configured database before any route reads or writes it."""
-    initialize_database(current_app.config["DATABASE"])
+def maintenance_key(database, day=None):
+    """Identifies one database's daily maintenance in _daily_backups_checked."""
+    return (database if is_postgres(database) else os.path.abspath(database),
+            day or date.today())
 
 
 def ensure_daily_backup():
-    """On the first request each day, save a dated copy to backups/,
-    then erase entries that have been in Trash for more than 30 days.
+    """On the first request each day, save a dated copy to backups/ (SQLite
+    only), then erase entries that have been in Trash for more than 30 days.
 
-    A failed backup is logged and never stops the page from loading. It is
-    not retried until the next day (or a server restart), so a persistent
-    problem doesn't slow down or spam every request.
+    PostgreSQL gets no file copy: the database host keeps its own restore
+    history (Neon does). A failed backup is logged and never stops the page
+    from loading. It is not retried until the next day (or a server
+    restart), so a persistent problem doesn't slow down or spam every request.
     """
     if request.endpoint == "static":
         return
-    database_path = current_app.config["DATABASE"]
-    key = (os.path.abspath(database_path), date.today())
+    database = current_app.config["DATABASE"]
+    postgres = is_postgres(database)
+    key = maintenance_key(database)
     if key in _daily_backups_checked:
         return
     with _daily_backup_lock:
         if key in _daily_backups_checked:
             return
-        try:
-            # Copies the database file, so it uses its own connections.
-            run_daily_backup(database_path, key[1])
-        except Exception:
-            current_app.logger.exception("Automatic daily backup failed")
+        if not postgres:
+            try:
+                # Copies the database file, so it uses its own connections.
+                run_daily_backup(database, key[1])
+            except Exception:
+                current_app.logger.exception("Automatic daily backup failed")
         # After the backup, so entries about to be erased are in today's copy.
         try:
             run_trash_cleanup()
@@ -83,15 +91,32 @@ def page_not_found(error):
 
 
 def init_db_command():
-    """Add missing schema columns without replacing existing data."""
-    initialize_database(current_app.config["DATABASE"])
-    print("Database initialized successfully!")
+    """Run any pending schema migrations on the configured database."""
+    applied = initialize_database(current_app.config["DATABASE"])
+    kind = "PostgreSQL" if is_postgres(current_app.config["DATABASE"]) else "SQLite"
+    if applied:
+        click.echo(f"{kind} database upgraded: applied migration(s) "
+                   f"{', '.join(str(version) for version in applied)}.")
+    else:
+        click.echo(f"{kind} database is up to date.")
+
+
+@click.option("--sqlite", "sqlite_path", required=True,
+              type=click.Path(exists=True, dir_okay=False),
+              help="The SQLite journal file to copy from (it is not changed).")
+def copy_sqlite_command(sqlite_path):
+    """Copy users, entries and tags from a SQLite file into the configured,
+    empty PostgreSQL database (DATABASE_URL), keeping their ids."""
+    try:
+        counts = copy_sqlite_to_postgres(sqlite_path, current_app.config["DATABASE"])
+    except CopyError as error:
+        raise click.ClickException(str(error)) from None
+    click.echo("Copied " + ", ".join(f"{count} {table}" for table, count in counts.items()) + ".")
 
 
 @click.option("--email", required=True, help="Email of the existing account to receive the entries.")
 def assign_entries_command(email):
     """Give every entry and tag without an owner to an existing account."""
-    initialize_database(current_app.config["DATABASE"])
     connection = db.get_db()
     user = find_user_by_email(connection, email)
     if user is None:
@@ -108,12 +133,17 @@ def create_app(overrides=None):
     if overrides:
         app.config.update(overrides)
 
+    # Bring the schema up to date once, at startup (not on every request).
+    applied = initialize_database(app.config["DATABASE"])
+    if applied:
+        print(f"Applied database migration(s) {', '.join(map(str, applied))} at startup.",
+              file=sys.stderr)
+
     db.init_app(app)
     register_template_helpers(app)
 
-    app.before_request(ensure_database_schema)
     app.before_request(ensure_daily_backup)
-    auth.init_app(app)   # after the schema check: logging in reads the users table
+    auth.init_app(app)
     # After the login check, so a logged-out post goes to /login, not the CSRF page.
     security.init_app(app)
 
@@ -127,6 +157,7 @@ def create_app(overrides=None):
     app.register_error_handler(404, page_not_found)
     app.cli.command("init-db")(init_db_command)
     app.cli.command("assign-entries")(assign_entries_command)
+    app.cli.command("copy-sqlite-to-postgres")(copy_sqlite_command)
     return app
 
 

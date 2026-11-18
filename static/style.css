@@ -1318,10 +1318,12 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
 .stat-value span { font-family: var(--font-ui); font-size: var(--text-sm); font-weight: 500; color: var(--ink-faint); }
 .stat-label { margin-top: 2px; font-size: var(--text-sm); font-weight: 500; color: var(--ink-soft); }
 .stat-note { margin-top: 6px; font-size: var(--text-xs); color: var(--ink-faint); line-height: 1.5; }
+.stat-band-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 860px) {
     .stat-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .stat:nth-child(3) { border-left: 0; }
     .stat:nth-child(n+3) { border-top: 1px solid var(--rule); }
+    .stat-band-3 .stat:nth-child(3) { grid-column: span 2; }
 }
 
 .insights-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }

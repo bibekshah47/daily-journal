@@ -49,7 +49,7 @@ def get_memories(connection, today, limit=3, *, user_id):
     Today's entries and repeats are never included. Each entry carries "tags".
     """
     oldest = connection.execute(
-        "SELECT MIN(date(created_at)) FROM live_entries WHERE user_id = ?",
+        "SELECT MIN(substr(created_at, 1, 10)) FROM live_entries WHERE user_id = ?",
         (user_id,)).fetchone()[0]
     if not oldest or limit <= 0:
         return []
@@ -64,9 +64,9 @@ def get_memories(connection, today, limit=3, *, user_id):
     # One query for every candidate day; keep the latest entry of each day.
     placeholders = ", ".join("?" for _ in days)
     rows = connection.execute(f"""
-        SELECT {", ".join(_COLUMNS)}, date(created_at)
+        SELECT {", ".join(_COLUMNS)}, substr(created_at, 1, 10)
         FROM live_entries
-        WHERE user_id = ? AND date(created_at) IN ({placeholders})
+        WHERE user_id = ? AND substr(created_at, 1, 10) IN ({placeholders})
         ORDER BY created_at, id
     """, (user_id, *sorted(days))).fetchall()
     latest = {}

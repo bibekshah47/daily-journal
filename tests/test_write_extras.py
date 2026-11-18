@@ -13,7 +13,7 @@ import unittest
 from database import connect, initialize_database
 from rich_text import clean_html
 from templates_data import WRITING_TEMPLATES
-from tests.helpers import SECURITY_OFF, signed_in_client
+from tests.helpers import SECURITY_OFF, new_test_database, signed_in_client, skip_daily_maintenance
 
 
 class TemplateDataTests(unittest.TestCase):
@@ -46,24 +46,19 @@ class WriteExtrasPageTests(unittest.TestCase):
             assert hashlib.sha256(cls.real.read_bytes()).hexdigest() == cls.digest
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.path = str(Path(self.tmp.name) / 'journal.db')
-        initialize_database(self.path)
+        self.path = new_test_database(self)
         self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=self.path)
         self.client, self.user_id = signed_in_client(self.app, self.path)
         # Skip the once-a-day backup/cleanup hook.
-        self.module._daily_backups_checked.add((os.path.abspath(self.path), date.today()))
-
-    def tearDown(self):
-        self.tmp.cleanup()
+        skip_daily_maintenance(self.module, self.path)
 
     def add_entry(self):
         db = connect(self.path)
         try:
-            cursor = db.execute('INSERT INTO entries (content, created_at, user_id) VALUES (?, ?, ?)',
+            entry_id = db.insert('INSERT INTO entries (content, created_at, user_id) VALUES (?, ?, ?)',
                                 ('Existing words', '2026-11-16T09:00:00', self.user_id))
             db.commit()
-            return cursor.lastrowid
+            return entry_id
         finally:
             db.close()
 

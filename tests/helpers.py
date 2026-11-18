@@ -1,10 +1,104 @@
-"""Shared test helpers: test users and logging a test client in."""
+"""Shared test helpers: test databases, test users, logging a client in.
+
+Every test module imports this before the app, so the settings below apply
+to the whole run.
+
+Databases: tests run on throwaway SQLite files. Run with TEST_DB=postgres
+(and TEST_DATABASE_URL set, in the environment or .env) to run the same
+tests on PostgreSQL instead: each test then gets its own new schema, which
+is dropped afterwards. Tests about SQLite itself (file backups, upgrading old
+journal files) are skipped there.
+"""
 from datetime import datetime
+import os
+from pathlib import Path
+import shutil
+import tempfile
+import unittest
+from urllib.parse import quote
+import uuid
 
-from flask_login.utils import _create_identifier
-from werkzeug.security import generate_password_hash
+# Never let a developer's .env point the tests at a real database, and never
+# let the app's startup migration touch the real journal.db. (python-dotenv
+# doesn't override variables that are already set, even to "".)
+os.environ['DATABASE_URL'] = ''
+os.environ['APP_ENV'] = 'development'
+_SESSION_FOLDER = tempfile.mkdtemp(prefix='journal-tests-')
+os.environ['DATABASE'] = os.path.join(_SESSION_FOLDER, 'default.db')
+os.environ.pop('JOURNAL_DATABASE', None)
 
-from database import connect
+from flask_login.utils import _create_identifier  # noqa: E402
+from werkzeug.security import generate_password_hash  # noqa: E402
+
+from database import close_open_connections, connect, initialize_database  # noqa: E402
+
+
+def _test_database_url():
+    url = os.environ.get('TEST_DATABASE_URL', '').strip()
+    if not url:
+        try:
+            from dotenv import dotenv_values
+            url = (dotenv_values(Path(__file__).resolve().parent.parent / '.env')
+                   .get('TEST_DATABASE_URL') or '').strip()
+        except ImportError:
+            url = ''
+    return url
+
+
+POSTGRES = os.environ.get('TEST_DB', '').strip().lower() in ('postgres', 'postgresql')
+TEST_DATABASE_URL = _test_database_url()
+if POSTGRES and not TEST_DATABASE_URL:
+    raise RuntimeError('TEST_DB=postgres needs TEST_DATABASE_URL (in the environment or .env).')
+
+# For tests that are about SQLite itself.
+sqlite_only = unittest.skipIf(POSTGRES, 'SQLite-only test')
+postgres_only = unittest.skipUnless(POSTGRES, 'needs TEST_DB=postgres and TEST_DATABASE_URL')
+
+
+def with_search_path(url, schema):
+    """The URL with every connection's search_path set to `schema`."""
+    option = 'options=' + quote(f'-c search_path={schema}', safe='')
+    return url + ('&' if '?' in url else '?') + option
+
+
+def admin_connection():
+    """A connection to the test PostgreSQL database itself (no test schema)."""
+    import psycopg
+    return psycopg.connect(TEST_DATABASE_URL, autocommit=True, connect_timeout=10)
+
+
+def _drop_schema(schema):
+    close_open_connections()   # an open transaction would block DROP SCHEMA
+    with admin_connection() as admin:
+        admin.execute("SET lock_timeout = '10s'")
+        admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+
+
+def empty_test_database(testcase, name='journal.db'):
+    """A brand-new database with no tables yet. Removed after the test."""
+    if POSTGRES:
+        schema = 'journal_test_' + uuid.uuid4().hex[:16]
+        with admin_connection() as admin:
+            admin.execute(f'CREATE SCHEMA "{schema}"')
+        testcase.addCleanup(_drop_schema, schema)
+        return with_search_path(TEST_DATABASE_URL, schema)
+    folder = tempfile.mkdtemp(prefix='journal-test-', dir=_SESSION_FOLDER)
+    testcase.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+    return os.path.join(folder, name)
+
+
+def skip_daily_maintenance(app_module, target, day=None):
+    """Mark today's backup and Trash cleanup as done for `target`, so no
+    request in the test runs them."""
+    app_module._daily_backups_checked.add(app_module.maintenance_key(target, day))
+
+
+def new_test_database(testcase, name='journal.db'):
+    """A fresh database with the current schema, for one test. Returns its
+    target (a SQLite path, or a PostgreSQL URL for a private schema)."""
+    target = empty_test_database(testcase, name)
+    initialize_database(target)
+    return target
 
 TEST_EMAIL = 'me@example.com'
 TEST_PASSWORD = 'correct-horse-battery'
@@ -24,11 +118,11 @@ def add_user(path, email=TEST_EMAIL, password=TEST_PASSWORD, display_name=None):
         _hashes[password] = generate_password_hash(password, method='pbkdf2:sha256:1000')
     db = connect(path)
     try:
-        cursor = db.execute(
+        user_id = db.insert(
             'INSERT INTO users (email, password_hash, created_at, display_name) VALUES (?, ?, ?, ?)',
             (email, _hashes[password], datetime.now().isoformat(), display_name))
         db.commit()
-        return cursor.lastrowid
+        return user_id
     finally:
         db.close()
 

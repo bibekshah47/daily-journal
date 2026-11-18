@@ -121,35 +121,36 @@ def login_locked(connection, key, now=None):
 
 
 def record_failed_login(connection, key, now=None):
-    """Count one failed login. Returns True if this failure locked the email. Commits."""
+    """Count one failed login. Returns True if this failure locked the email. Commits.
+
+    One atomic upsert (no read-then-write), so concurrent failures are all
+    counted on both SQLite and PostgreSQL. Timestamps are ISO text, which
+    sorts in time order.
+    """
     now = now or datetime.now()
-    window_cutoff = now - LOCKOUT_WINDOW
+    window_cutoff = (now - LOCKOUT_WINDOW).isoformat()
     with connection:
-        connection.execute("BEGIN IMMEDIATE")
         # Forget emails whose lockout and counting window are both over.
         connection.execute(
             "DELETE FROM login_throttle WHERE (locked_until IS NULL OR locked_until < ?) "
             "AND (window_start IS NULL OR window_start < ?)",
-            (now.isoformat(), window_cutoff.isoformat()))
-        row = connection.execute(
-            "SELECT failures, window_start FROM login_throttle WHERE email_hash = ?",
-            (key,)).fetchone()
-        window_start = _parse(row[1]) if row else None
-        if window_start is None or window_start < window_cutoff:
-            failures, window_start = 1, now
-        else:
-            failures = row[0] + 1
+            (now.isoformat(), window_cutoff))
+        # A window that has run out (or never started) starts again at 1.
+        failures = connection.fetchone(
+            "INSERT INTO login_throttle (email_hash, failures, window_start) VALUES (?, 1, ?) "
+            "ON CONFLICT (email_hash) DO UPDATE SET "
+            "failures = CASE WHEN login_throttle.window_start IS NULL "
+            "    OR login_throttle.window_start < ? THEN 1 ELSE login_throttle.failures + 1 END, "
+            "window_start = CASE WHEN login_throttle.window_start IS NULL "
+            "    OR login_throttle.window_start < ? THEN excluded.window_start "
+            "    ELSE login_throttle.window_start END "
+            "RETURNING failures",
+            (key, now.isoformat(), window_cutoff, window_cutoff))[0]
         locked = failures >= MAX_FAILED_LOGINS
         if locked:
-            values = (0, None, (now + LOCKOUT_WINDOW).isoformat())
-        else:
-            values = (failures, window_start.isoformat(), None)
-        connection.execute(
-            "INSERT INTO login_throttle (email_hash, failures, window_start, locked_until) "
-            "VALUES (?, ?, ?, ?) ON CONFLICT(email_hash) DO UPDATE SET "
-            "failures = excluded.failures, window_start = excluded.window_start, "
-            "locked_until = COALESCE(excluded.locked_until, locked_until)",
-            (key, *values))
+            connection.execute(
+                "UPDATE login_throttle SET failures = 0, window_start = NULL, locked_until = ? "
+                "WHERE email_hash = ?", ((now + LOCKOUT_WINDOW).isoformat(), key))
     return locked
 
 

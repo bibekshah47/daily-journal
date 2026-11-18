@@ -33,9 +33,9 @@ def get_week_review(connection, start, *, user_id):
     """Everything the /week page shows for user_id's week starting on Sunday `start`."""
     start, end = week_bounds(start)
     rows = connection.execute(f"""
-        SELECT {", ".join(_COLUMNS)}, date(created_at)
+        SELECT {", ".join(_COLUMNS)}, substr(created_at, 1, 10)
         FROM live_entries
-        WHERE user_id = ? AND date(created_at) BETWEEN ? AND ?
+        WHERE user_id = ? AND substr(created_at, 1, 10) BETWEEN ? AND ?
         ORDER BY created_at, id
     """, (user_id, start.isoformat(), end.isoformat())).fetchall()
     entries = [dict(zip(_COLUMNS, row[:-1]), day=date.fromisoformat(row[-1]))

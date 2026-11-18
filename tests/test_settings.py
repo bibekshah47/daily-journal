@@ -4,6 +4,7 @@ from datetime import datetime
 import io
 import os
 import re
+import sqlite3
 import tempfile
 import time
 import unittest
@@ -14,7 +15,7 @@ from database import connect, initialize_database
 import mailer
 import security
 from tags import set_entry_tags
-from tests.helpers import SECURITY_OFF, TEST_EMAIL, TEST_PASSWORD, add_user, log_in_as
+from tests.helpers import SECURITY_OFF, TEST_EMAIL, TEST_PASSWORD, add_user, log_in_as, new_test_database, skip_daily_maintenance, sqlite_only
 
 SECRET = 'settings-test-secret-' + 'y' * 40
 NEW_PASSWORD = 'a-brand-new-password'
@@ -30,14 +31,11 @@ class AccountTestCase(unittest.TestCase):
 
     def setUp(self):
         import app as module
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.path = os.path.join(self.tmp.name, 'journal.db')
-        initialize_database(self.path)
+        self.path = new_test_database(self)
         self.outbox = []
         self.app = module.create_app({'TESTING': True, 'DATABASE': self.path, 'SECRET_KEY': SECRET,
                                       'MAIL_OUTBOX': self.outbox, **self.overrides})
-        module._daily_backups_checked.add((os.path.abspath(self.path), datetime.now().date()))
+        skip_daily_maintenance(module, self.path)
         security.limiter.reset()
         security.reset_forgot_limits()
         self.user_id = add_user(self.path, display_name='Ann Lee')
@@ -67,12 +65,12 @@ class AccountTestCase(unittest.TestCase):
     def add_entry(self, user_id, tags=()):
         db = connect(self.path)
         try:
-            cursor = db.execute('INSERT INTO entries (content, created_at, user_id) VALUES (?, ?, ?)',
+            entry_id = db.insert('INSERT INTO entries (content, created_at, user_id) VALUES (?, ?, ?)',
                                 ('Text', datetime.now().isoformat(), user_id))
             if tags:
-                set_entry_tags(db, cursor.lastrowid, list(tags), user_id=user_id)
+                set_entry_tags(db, entry_id, list(tags), user_id=user_id)
             db.commit()
-            return cursor.lastrowid
+            return entry_id
         finally:
             db.close()
 
@@ -385,12 +383,13 @@ class DeletedIdTests(AccountTestCase):
         self.assertEqual(self.app.test_client().get(f'/reset/{stale_link}').status_code, 400)
 
 
+@sqlite_only
 class UsersUpgradeTests(unittest.TestCase):
     def test_old_users_table_is_upgraded_keeping_ids_and_entries(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         path = os.path.join(tmp.name, 'old.db')
-        db = connect(path)
+        db = sqlite3.connect(path)
         db.executescript("""
             CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE,
                                 password_hash TEXT NOT NULL, created_at TEXT NOT NULL,
@@ -413,8 +412,8 @@ class UsersUpgradeTests(unittest.TestCase):
         db = connect(path)
         with db:
             db.execute('DELETE FROM users WHERE id = 7')   # cascade still works
-            new_id = db.execute("INSERT INTO users (email, password_hash, created_at) "
-                                "VALUES ('c@example.com', 'h', '2026')").lastrowid
+            new_id = db.insert("INSERT INTO users (email, password_hash, created_at) "
+                                "VALUES ('c@example.com', 'h', '2026')")
         db.close()
         self.assertEqual(self.query(path, 'SELECT COUNT(*) FROM entries')[0][0], 0)
         self.assertEqual(new_id, 8)

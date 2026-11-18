@@ -10,7 +10,7 @@ from unittest import mock
 
 from database import connect, initialize_database
 from tags import set_entry_tags
-from tests.helpers import SECURITY_OFF, add_user, signed_in_client
+from tests.helpers import SECURITY_OFF, add_user, new_test_database, signed_in_client, skip_daily_maintenance
 from weekly import get_week_review, week_bounds, week_label
 
 SUNDAY = date(2026, 11, 15)   # the week of Nov 15 – 21, 2026
@@ -43,27 +43,24 @@ class WeekBoundsTests(unittest.TestCase):
 
 class WeekReviewTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.path = str(Path(self.tmp.name) / 'journal.db')
-        initialize_database(self.path)
+        self.path = new_test_database(self)
         self.user_id = add_user(self.path)
         self.db = connect(self.path)
 
     def tearDown(self):
         self.db.close()
-        self.tmp.cleanup()
 
     def add(self, created_at, content='Words', mood=None, title=None, tags=(),
             went_well=None, went_wrong=None, improve_tomorrow=None, deleted_at=None):
-        cursor = self.db.execute(
+        cursor = self.db.insert(
             'INSERT INTO entries (title, content, mood, created_at, went_well, went_wrong, '
             'improve_tomorrow, deleted_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (title, content, mood, created_at, went_well, went_wrong, improve_tomorrow, deleted_at,
              self.user_id))
         if tags:
-            set_entry_tags(self.db, cursor.lastrowid, tags, user_id=self.user_id)
+            set_entry_tags(self.db, cursor, tags, user_id=self.user_id)
         self.db.commit()
-        return cursor.lastrowid
+        return cursor
 
     def review(self, start=SUNDAY):
         return get_week_review(self.db, start, user_id=self.user_id)
@@ -173,9 +170,7 @@ class WeekPageTests(unittest.TestCase):
             assert hashlib.sha256(cls.real.read_bytes()).hexdigest() == cls.digest
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.path = str(Path(self.tmp.name) / 'journal.db')
-        initialize_database(self.path)
+        self.path = new_test_database(self)
         self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=self.path)
         self.client, self.user_id = signed_in_client(self.app, self.path)
         # Pin "today" (in the app's daily hook and the /week route), and skip
@@ -184,20 +179,17 @@ class WeekPageTests(unittest.TestCase):
             patcher = mock.patch.object(module, 'date', _FixedDate)
             patcher.start()
             self.addCleanup(patcher.stop)
-        self.module._daily_backups_checked.add((os.path.abspath(self.path), _FixedDate.today()))
-
-    def tearDown(self):
-        self.tmp.cleanup()
+        skip_daily_maintenance(self.module, self.path, _FixedDate.today())
 
     def add(self, created_at, content='Words', **fields):
         db = connect(self.path)
         try:
             columns = ['content', 'created_at', 'user_id', *fields]
-            cursor = db.execute(
+            entry_id = db.insert(
                 f"INSERT INTO entries ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
                 (content, created_at, self.user_id, *fields.values()))
             db.commit()
-            return cursor.lastrowid
+            return entry_id
         finally:
             db.close()
 
@@ -264,10 +256,10 @@ class WeekPageTests(unittest.TestCase):
             for created_at, tags, deleted in (('2026-11-16T09:00:00', ['work'], None),
                                               ('2026-11-17T09:00:00', ['work', 'trip'], None),
                                               ('2026-11-17T10:00:00', ['secret'], '2026-11-17T11:00:00')):
-                cursor = db.execute(
+                entry_id = db.insert(
                     'INSERT INTO entries (content, created_at, title, deleted_at, user_id) '
                     'VALUES (?, ?, ?, ?, ?)', ('Words', created_at, f'Entry {tags[0]}', deleted, self.user_id))
-                set_entry_tags(db, cursor.lastrowid, tags, user_id=self.user_id)
+                set_entry_tags(db, entry_id, tags, user_id=self.user_id)
             db.commit()
         finally:
             db.close()

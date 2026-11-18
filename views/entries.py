@@ -72,7 +72,7 @@ def home():
     # Did the user already write today? Link to that entry if so.
     today_entry = connection.execute("""
         SELECT id, title FROM live_entries
-        WHERE user_id = ? AND date(created_at) = ?
+        WHERE user_id = ? AND substr(created_at, 1, 10) = ?
         ORDER BY created_at DESC LIMIT 1
     """, (me, today.isoformat())).fetchone()
 
@@ -82,10 +82,10 @@ def home():
     # Moods for the last 14 days (latest entry of each day)
     start = today - timedelta(days=13)
     mood_rows = connection.execute("""
-        SELECT date(created_at) AS day, mood
+        SELECT substr(created_at, 1, 10) AS day, mood
         FROM live_entries
-        WHERE user_id = ? AND date(created_at) >= ?
-        ORDER BY created_at
+        WHERE user_id = ? AND substr(created_at, 1, 10) >= ?
+        ORDER BY created_at, id
     """, (me, start.isoformat())).fetchall()
 
     day_moods = {}
@@ -153,14 +153,13 @@ def write_journal():
         created_at = datetime.now().isoformat()
 
         connection = get_db()
-        cursor = connection.execute("""
+        entry_id = connection.insert("""
             INSERT INTO entries
                 (user_id, title, content, mood, created_at, content_html,
                  went_well, went_wrong, improve_tomorrow)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (user_id(), title, content, mood, created_at, content_html,
               *(reflections[field] for field in REFLECTION_FIELDS)))
-        entry_id = cursor.lastrowid
         set_entry_tags(connection, entry_id, tags, user_id=user_id())
         connection.commit()
 

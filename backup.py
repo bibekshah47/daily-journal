@@ -1,4 +1,8 @@
-"""Export, restore and automatic daily backups for the journal database."""
+"""Export, restore and automatic daily backups for the journal database.
+
+Export and restore work on SQLite and PostgreSQL. The file copies (daily
+backups, copy_database) are SQLite only.
+"""
 from datetime import date, datetime
 import json
 import os
@@ -236,7 +240,6 @@ def restore_entries(connection, entries, *, user_id):
     placeholders = ", ".join("?" for _ in columns)
     added = skipped = 0
     with connection:
-        connection.execute("BEGIN IMMEDIATE")
         # Read "entries", not "live_entries": an entry in Trash still counts
         # as existing, so restoring a backup never duplicates it.
         seen = {(row[0], row[1]) for row in connection.execute(
@@ -247,12 +250,12 @@ def restore_entries(connection, entries, *, user_id):
             if key in seen:
                 skipped += 1
                 continue
-            cursor = connection.execute(
+            entry_id = connection.insert(
                 f"INSERT INTO entries ({', '.join(columns)}) VALUES ({placeholders})",
                 (*(entry[column] for column in columns[:-1]), user_id),
             )
             if entry.get("tags"):
-                set_entry_tags(connection, cursor.lastrowid, entry["tags"], user_id=user_id)
+                set_entry_tags(connection, entry_id, entry["tags"], user_id=user_id)
             seen.add(key)
             added += 1
     return added, skipped

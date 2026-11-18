@@ -62,17 +62,19 @@ def set_entry_tags(connection, entry_id, tags, *, user_id):
     connection.execute(
         "DELETE FROM entry_tags WHERE entry_id = ? "
         "AND entry_id IN (SELECT id FROM entries WHERE user_id = ?)", (entry_id, user_id))
-    for name in normalize_tags(tags):
+    for position, name in enumerate(normalize_tags(tags)):
         connection.execute(
-            "INSERT OR IGNORE INTO tags (user_id, name) "
-            "SELECT ?, ? WHERE EXISTS (SELECT 1 FROM entries WHERE id = ? AND user_id = ?)",
+            "INSERT INTO tags (user_id, name) "
+            "SELECT ?, ? WHERE EXISTS (SELECT 1 FROM entries WHERE id = ? AND user_id = ?) "
+            "ON CONFLICT DO NOTHING",
             (user_id, name, entry_id, user_id))
         connection.execute(
-            "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) "
-            "SELECT entries.id, tags.id FROM entries "
+            "INSERT INTO entry_tags (entry_id, tag_id, sort_order) "
+            "SELECT entries.id, tags.id, ? FROM entries "
             "JOIN tags ON tags.user_id = entries.user_id "
-            "WHERE entries.id = ? AND entries.user_id = ? AND tags.name = ?",
-            (entry_id, user_id, name))
+            "WHERE entries.id = ? AND entries.user_id = ? AND tags.name = ? "
+            "ON CONFLICT DO NOTHING",
+            (position, entry_id, user_id, name))
     delete_unused_tags(connection, user_id)
 
 
@@ -80,7 +82,7 @@ def get_tags_for_entries(connection, ids, *, user_id):
     """{entry_id: [tag names in the order they were added]} for user_id's entries."""
     ids = list(dict.fromkeys(ids))
     result = {entry_id: [] for entry_id in ids}
-    # Stay well below SQLite's limit on query parameters.
+    # Stay well below either database's limit on query parameters.
     for start in range(0, len(ids), 500):
         chunk = ids[start:start + 500]
         rows = connection.execute(f"""
@@ -90,7 +92,7 @@ def get_tags_for_entries(connection, ids, *, user_id):
             JOIN entries ON entries.id = entry_tags.entry_id
             WHERE tags.user_id = ? AND entries.user_id = ?
               AND entry_tags.entry_id IN ({", ".join("?" for _ in chunk)})
-            ORDER BY entry_tags.rowid
+            ORDER BY entry_tags.entry_id, entry_tags.sort_order, entry_tags.tag_id
         """, (user_id, user_id, *chunk)).fetchall()
         for entry_id, name in rows:
             result[entry_id].append(name)
@@ -105,6 +107,7 @@ def all_tags_with_counts(connection, *, user_id):
         JOIN entry_tags ON entry_tags.tag_id = tags.id
         JOIN live_entries ON live_entries.id = entry_tags.entry_id
         WHERE tags.user_id = ? AND live_entries.user_id = ?
-        GROUP BY tags.id ORDER BY tags.name
+        GROUP BY tags.id, tags.name
     """, (user_id, user_id)).fetchall()
-    return [{"name": name, "count": count} for name, count in rows]
+    # Sorted here: PostgreSQL's text order depends on the server's locale.
+    return [{"name": name, "count": count} for name, count in sorted(rows)]
