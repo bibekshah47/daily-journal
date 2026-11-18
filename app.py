@@ -14,7 +14,6 @@ views/:
     backup    /backup  and its downloads and restore
     settings  /settings: name, email, password, delete account
 """
-from datetime import date, datetime
 import os
 import sys
 import threading
@@ -29,6 +28,7 @@ from backup import run_daily_backup
 from config import load_config
 from copy_to_postgres import CopyError, copy_sqlite_to_postgres
 from database import initialize_database, is_postgres
+from timeutil import utc_now, utc_today
 from trash import cleanup_trash
 from views import backup as backup_views
 from views import auth, entries, history, insights, settings
@@ -41,9 +41,10 @@ _daily_backup_lock = threading.Lock()
 
 
 def maintenance_key(database, day=None):
-    """Identifies one database's daily maintenance in _daily_backups_checked."""
+    """Identifies one database's daily maintenance in _daily_backups_checked.
+    Maintenance is system work, so "daily" means the UTC day."""
     return (database if is_postgres(database) else os.path.abspath(database),
-            day or date.today())
+            day or utc_today())
 
 
 def ensure_daily_backup():
@@ -83,7 +84,7 @@ def run_trash_cleanup():
     """Erase entries that have been in Trash for more than 30 days."""
     connection = db.get_db()
     with connection:
-        return cleanup_trash(connection, datetime.now())
+        return cleanup_trash(connection, utc_now())
 
 
 def page_not_found(error):

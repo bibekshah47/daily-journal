@@ -152,7 +152,7 @@ class TrashTests(unittest.TestCase):
                                  history)
             db = connect(self.path)
             try:
-                stats = get_journal_stats(db, user_id=self.user_id)
+                stats = get_journal_stats(db, date.today(), user_id=self.user_id)
                 memories = [m['entry']['id'] for m in get_memories(db, date.today(), user_id=self.user_id)]
                 tag_names = [t['name'] for t in all_tags_with_counts(db, user_id=self.user_id)]
             finally:
@@ -285,11 +285,16 @@ class TrashTests(unittest.TestCase):
         self.assertEqual([row[0] for row in self.query('SELECT name FROM tags')], ['walks'])
 
     def test_cleanup_erases_only_entries_older_than_30_days(self):
+        # now is UTC; deleted_at is the owner's wall-clock time, which can be
+        # ahead of UTC, so one extra day passes before anything is erased.
         now = datetime(2026, 11, 16, 12, 0, 0)
         expired = self.add('Expired', '2026-09-01T09:00:00', tags=['old-only'],
-                           deleted_at='2026-10-17T11:59:59')
+                           deleted_at='2026-10-16T11:59:59')
         recent = self.add('Recent', '2026-09-02T09:00:00',
-                          deleted_at='2026-10-17T12:00:01')
+                          deleted_at='2026-10-16T12:00:01')
+        # Deleted at 13:00 Hawaii time (UTC-10), i.e. 23:00 UTC: only 29.5 days
+        # ago, though the wall-clock text reads as more than 30 days: kept.
+        behind = self.add('Kept', '2026-09-03T09:00:00', deleted_at='2026-10-16T13:00:00')
         live = self.add('Live', '2026-09-01T10:00:00')
         db = connect(self.path)
         try:
@@ -298,7 +303,8 @@ class TrashTests(unittest.TestCase):
         finally:
             db.close()
         self.assertEqual(self.deleted_at(expired), 'erased')
-        self.assertEqual(self.deleted_at(recent), '2026-10-17T12:00:01')
+        self.assertEqual(self.deleted_at(recent), '2026-10-16T12:00:01')
+        self.assertEqual(self.deleted_at(behind), '2026-10-16T13:00:00')
         self.assertIsNone(self.deleted_at(live))
         self.assertEqual(self.query('SELECT name FROM tags'), [])
 

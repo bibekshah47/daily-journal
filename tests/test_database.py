@@ -103,16 +103,16 @@ class MigrationTests(unittest.TestCase):
 
     def test_migrations_run_once_and_are_idempotent(self):
         target = empty_test_database(self)
-        self.assertEqual(initialize_database(target), [1, 2])
+        self.assertEqual(initialize_database(target), [1, 2, 3])
         self.assertEqual(initialize_database(target), [])
         self.assertEqual(initialize_database(target), [])
         db = connect(target)
         try:
             self.assertEqual(db.fetchall('SELECT version FROM schema_migrations ORDER BY version'),
-                             [(1,), (2,)])
+                             [(1,), (2,), (3,)])
             self.assertLessEqual({'users', 'entries', 'tags', 'entry_tags', 'live_entries',
                                   'login_throttle', 'schema_migrations'}, self.tables(db))
-            self.assertEqual(migrations.LATEST_VERSION, 2)
+            self.assertEqual(migrations.LATEST_VERSION, 3)
         finally:
             db.close()
 
@@ -146,7 +146,7 @@ class MigrationTests(unittest.TestCase):
     @sqlite_only
     def test_existing_sqlite_file_is_marked_version_1_without_changes(self):
         """A journal file made before migrations (by the old per-request
-        upgrade) is recorded as version 1; only migration 2 runs."""
+        upgrade) is recorded as version 1; only the later migrations run."""
         path = empty_test_database(self)
         old = connect(path)
         migrations._upgrade_pre_migration_sqlite(old)   # what the app used to do
@@ -161,18 +161,20 @@ class MigrationTests(unittest.TestCase):
                                      "WHERE name NOT LIKE 'sqlite_%' ORDER BY name")
         old.close()
 
-        self.assertEqual(initialize_database(path), [2])
+        self.assertEqual(initialize_database(path), [2, 3])
         db = connect(path)
         try:
             self.assertEqual(db.fetchall('SELECT version FROM schema_migrations ORDER BY version'),
-                             [(1,), (2,)])
+                             [(1,), (2,), (3,)])
             self.assertEqual(db.fetchall('SELECT id, content, user_id FROM entries'), [(9, 'Kept', 4)])
-            # Nothing but migration 2's column changed.
+            # Existing users wrote in New York time.
+            self.assertEqual(db.fetchall('SELECT id, timezone FROM users'), [(4, 'America/New_York')])
+            # Nothing but migrations 2 and 3's columns changed.
             schema_after = db.fetchall("SELECT type, name, sql FROM sqlite_master "
                                        "WHERE name NOT LIKE 'sqlite_%' AND name != 'schema_migrations' "
                                        "ORDER BY name")
             changed = [after for before, after in zip(schema_before, schema_after) if before != after]
-            self.assertEqual([row[1] for row in changed], ['entry_tags'])
+            self.assertEqual([row[1] for row in changed], ['entry_tags', 'users'])
             self.assertEqual(get_tags_for_entries(db, [9], user_id=4), {9: ['b', 'a']})
         finally:
             db.close()

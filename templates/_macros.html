@@ -336,3 +336,25 @@
     });
 </script>
 {% endmacro %}
+
+
+{# The browser's time zone, sent with sign up and log in (and used by
+   Settings' "Use this device's time zone"). Filled by browser_timezone_script. #}
+{% macro browser_timezone_field() %}
+<input type="hidden" name="timezone" value="" data-browser-timezone>
+{% endmacro %}
+
+
+{% macro browser_timezone_script() %}
+<script nonce="{{ csp_nonce }}">
+    (function () {
+        let zone = "";
+        try {
+            zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+        } catch (error) {}
+        document.querySelectorAll("input[data-browser-timezone]").forEach(function (input) {
+            input.value = zone;
+        });
+    })();
+</script>
+{% endmacro %}

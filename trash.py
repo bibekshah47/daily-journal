@@ -29,10 +29,19 @@ def empty_trash(connection, *, user_id):
     return _erase(connection, "AND user_id = ?", (user_id,))
 
 
-def cleanup_trash(connection, now, days=TRASH_DAYS):
-    """Erase entries that have been in Trash for more than `days`. Returns the count.
+# deleted_at is the owner's wall-clock time. In a zone behind UTC (as far as
+# 12 hours, e.g. Hawaii at -10) that reads older than the real moment, so a
+# plain UTC comparison could erase an entry up to 12 hours early. The cleanup
+# allows one extra day, so nothing is ever erased before its 30 days are up in
+# its owner's time zone (it may stay up to a day longer instead).
+TIME_ZONE_GRACE = timedelta(days=1)
+
+
+def cleanup_trash(connection, utc_now, days=TRASH_DAYS):
+    """Erase entries that have been in Trash for more than `days` (plus the
+    time-zone grace day). `utc_now` is system time. Returns the count.
 
     Daily maintenance for every user at once; it never returns anyone's data.
     """
-    cutoff = (now - timedelta(days=days)).isoformat()
+    cutoff = (utc_now - timedelta(days=days) - TIME_ZONE_GRACE).isoformat()
     return _erase(connection, "AND deleted_at < ?", (cutoff,))

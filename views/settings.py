@@ -12,10 +12,12 @@ from flask_login import current_user, logout_user
 from accounts import (EmailTaken, change_display_name, change_email,
                       check_password, delete_user, display_name_error,
                       email_error, normalize_display_name, normalize_email,
-                      password_changed_at, password_error, set_password)
+                      password_changed_at, password_error, set_password,
+                      set_timezone)
 from db import get_db
 from security import (PASSWORD_CHECK_LIMITS, clear_failed_logins,
                       current_user_key, email_key, limiter)
+from timeutil import is_valid_timezone, normalize_timezone, timezone_aliases, timezone_choices
 from views.auth import User, start_session
 from views.shared import draft_key, user_id
 
@@ -29,11 +31,13 @@ SECTION_FOR_FIELD = {
     "display_name": "name",
     "new_email": "email", "email_password": "email",
     "current_password": "password", "new_password": "password",
+    "timezone": "timezone",
     "delete_password": "delete", "delete_confirm": "delete",
 }
 SECTION_FOR_ENDPOINT = {
     "settings.change_name": "name", "settings.change_email_route": "email",
-    "settings.change_password": "password", "settings.delete_account": "delete",
+    "settings.change_password": "password", "settings.change_timezone": "timezone",
+    "settings.delete_account": "delete",
 }
 
 
@@ -46,7 +50,7 @@ def render_settings(status=200, errors=None, values=None, general_error=None):
     entry_count = connection.execute(
         "SELECT COUNT(*) FROM entries WHERE user_id = ?", (user_id(),)).fetchone()[0]
     shown = {"display_name": current_user.display_name or "", "new_email": "",
-             "delete_confirm": ""}
+             "delete_confirm": "", "timezone": normalize_timezone(current_user.timezone)}
     shown.update(values or {})
     open_section = next((SECTION_FOR_FIELD[field] for field in errors
                          if field in SECTION_FOR_FIELD), None)
@@ -55,6 +59,9 @@ def render_settings(status=200, errors=None, values=None, general_error=None):
     return render_template("settings.html", errors=errors, values=shown,
                            general_error=general_error, entry_count=entry_count,
                            open_section=open_section,
+                           current_timezone=normalize_timezone(current_user.timezone),
+                           timezone_choices=timezone_choices(),
+                           timezone_aliases=timezone_aliases(),
                            password_changed=password_changed_at(connection, user_id())), status
 
 
@@ -72,6 +79,17 @@ def change_name():
         return render_settings(400, {"display_name": error}, {"display_name": raw})
     change_display_name(get_db(), user_id(), name)
     flash("Name saved.")
+    return redirect(url_for("settings.settings_page"))
+
+
+@bp.route("/settings/timezone", methods=["POST"])
+def change_timezone():
+    """Dates (today, streaks, the week, new entries) follow this zone."""
+    name = request.form.get("timezone", "").strip()
+    if not is_valid_timezone(name):
+        return render_settings(400, {"timezone": "Choose a time zone from the list"})
+    set_timezone(get_db(), user_id(), name)
+    flash("Time zone saved.")
     return redirect(url_for("settings.settings_page"))
 
 
@@ -117,7 +135,8 @@ def change_password():
     # Raising the version logged out every session, this one included: log
     # this device straight back in, keeping "Keep me logged in" if it was on.
     remember = current_app.config.get("REMEMBER_COOKIE_NAME", "remember_token") in request.cookies
-    start_session(User(current_user.id, current_user.email, current_user.display_name, version),
+    start_session(User(current_user.id, current_user.email, current_user.display_name, version,
+                       current_user.timezone),
                   remember=remember)
     flash("Password changed. You've been logged out on your other devices.")
     return redirect(url_for("settings.settings_page"))

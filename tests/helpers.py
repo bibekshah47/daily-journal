@@ -9,12 +9,14 @@ tests on PostgreSQL instead: each test then gets its own new schema, which
 is dropped afterwards. Tests about SQLite itself (file backups, upgrading old
 journal files) are skipped there.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import shutil
 import tempfile
+import time
 import unittest
+from unittest import mock
 from urllib.parse import quote
 import uuid
 
@@ -26,6 +28,12 @@ os.environ['APP_ENV'] = 'development'
 _SESSION_FOLDER = tempfile.mkdtemp(prefix='journal-tests-')
 os.environ['DATABASE'] = os.path.join(_SESSION_FOLDER, 'default.db')
 os.environ.pop('JOURNAL_DATABASE', None)
+# Run like a production server: on UTC, whatever this computer's zone is. Test
+# users without a time zone are UTC users too, so a test's own date.today()
+# matches the app's "today" for them.
+os.environ['TZ'] = 'UTC'
+if hasattr(time, 'tzset'):
+    time.tzset()
 
 from flask_login.utils import _create_identifier  # noqa: E402
 from werkzeug.security import generate_password_hash  # noqa: E402
@@ -87,6 +95,20 @@ def empty_test_database(testcase, name='journal.db'):
     return os.path.join(folder, name)
 
 
+def freeze_time(testcase, moment):
+    """Make timeutil's clock return `moment` for the rest of the test.
+
+    `moment` is a datetime: naive means UTC. Every part of the app (user
+    time and system time) reads the clock through timeutil.
+    """
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    patcher = mock.patch('timeutil.clock', return_value=moment)
+    patcher.start()
+    testcase.addCleanup(patcher.stop)
+    return moment
+
+
 def skip_daily_maintenance(app_module, target, day=None):
     """Mark today's backup and Trash cleanup as done for `target`, so no
     request in the test runs them."""
@@ -112,15 +134,17 @@ SECURITY_OFF = {'WTF_CSRF_ENABLED': False, 'RATELIMIT_ENABLED': False}
 _hashes = {}
 
 
-def add_user(path, email=TEST_EMAIL, password=TEST_PASSWORD, display_name=None):
-    """Insert a user straight into the database at `path`. Returns its id."""
+def add_user(path, email=TEST_EMAIL, password=TEST_PASSWORD, display_name=None, timezone=None):
+    """Insert a user straight into the database at `path`. Returns its id.
+    No time zone (the default) behaves as UTC."""
     if password not in _hashes:
         _hashes[password] = generate_password_hash(password, method='pbkdf2:sha256:1000')
     db = connect(path)
     try:
         user_id = db.insert(
-            'INSERT INTO users (email, password_hash, created_at, display_name) VALUES (?, ?, ?, ?)',
-            (email, _hashes[password], datetime.now().isoformat(), display_name))
+            'INSERT INTO users (email, password_hash, created_at, display_name, timezone) '
+            'VALUES (?, ?, ?, ?, ?)',
+            (email, _hashes[password], datetime.now().isoformat(), display_name, timezone))
         db.commit()
         return user_id
     finally:

@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request
 
 from db import get_db
 from tags import normalize_tag
+from timeutil import user_today
 from views.shared import attach_tags, entry_summary, parse_timestamp, trash_count, user_id
 
 bp = Blueprint("history", __name__)
@@ -13,7 +14,7 @@ bp = Blueprint("history", __name__)
 
 @bp.route("/history")
 def history():
-    today = date.today()
+    today = user_today()
 
     # Read filters from the URL
     search_query = request.args.get("search", "").strip()

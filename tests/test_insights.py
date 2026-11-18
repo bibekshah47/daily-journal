@@ -118,7 +118,7 @@ class InsightsTests(unittest.TestCase):
             self.assertNotIn('No reflections yet', page)
             self.assertNotIn('chart.js', page.lower())
             with connect(path) as db:
-                stats = get_journal_stats(db, user_id=user_id)
+                stats = get_journal_stats(db, date.today(), user_id=user_id)
                 self.assertEqual(stats['total_entries'], 1)
                 self.assertEqual(stats['current_streak'], 1)
                 self.assertEqual(stats['monthly_entries'], 1)

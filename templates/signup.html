@@ -11,6 +11,7 @@
 
     <form method="POST" action="{{ url_for('auth.signup') }}" class="auth-form" novalidate>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ ui.browser_timezone_field() }}
 
         {% if errors.get('too_many') %}
         <div class="form-error" role="alert">
@@ -58,5 +59,6 @@
 
 {% block scripts %}
 {{ ui.password_toggle_script() }}
+{{ ui.browser_timezone_script() }}
 {% if errors.get('password') and not (errors.get('display_name') or errors.get('email') or errors.get('email_taken')) %}<script nonce="{{ csp_nonce }}">document.getElementById("password").focus();</script>{% endif %}
 {% endblock %}

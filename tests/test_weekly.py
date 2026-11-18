@@ -1,5 +1,5 @@
 """Weekly review, using temporary databases only."""
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 import hashlib
 import importlib
 import os
@@ -10,7 +10,7 @@ from unittest import mock
 
 from database import connect, initialize_database
 from tags import set_entry_tags
-from tests.helpers import SECURITY_OFF, add_user, new_test_database, signed_in_client, skip_daily_maintenance
+from tests.helpers import (SECURITY_OFF, add_user, freeze_time, new_test_database, signed_in_client, skip_daily_maintenance)
 from weekly import get_week_review, week_bounds, week_label
 
 SUNDAY = date(2026, 11, 15)   # the week of Nov 15 – 21, 2026
@@ -173,12 +173,9 @@ class WeekPageTests(unittest.TestCase):
         self.path = new_test_database(self)
         self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=self.path)
         self.client, self.user_id = signed_in_client(self.app, self.path)
-        # Pin "today" (in the app's daily hook and the /week route), and skip
-        # the once-a-day backup/cleanup hook.
-        for module in (self.module, importlib.import_module('views.insights')):
-            patcher = mock.patch.object(module, 'date', _FixedDate)
-            patcher.start()
-            self.addCleanup(patcher.stop)
+        # Pin "today" (for the /week route and the daily hook), and skip the
+        # once-a-day backup/cleanup hook. The test user is a UTC user.
+        freeze_time(self, datetime.combine(_FixedDate.today(), time(12, 0)))
         skip_daily_maintenance(self.module, self.path, _FixedDate.today())
 
     def add(self, created_at, content='Words', **fields):

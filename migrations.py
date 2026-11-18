@@ -14,9 +14,9 @@ created, so a migration that adds a column to entries must also drop and
 recreate live_entries. (SQLite expands it each time the view is used.)
 """
 from collections import namedtuple
-from datetime import datetime
 
 from database import connect
+from timeutil import utc_now
 
 Migration = namedtuple("Migration", "version description sqlite postgres")
 
@@ -158,6 +158,15 @@ MIGRATIONS = [
                 "UPDATE entry_tags SET sort_order = rowid"],
         postgres=["ALTER TABLE entry_tags ADD COLUMN sort_order INTEGER"],
     ),
+    Migration(
+        3, "Each user's time zone, so 'today' is their day, not the server's",
+        # Everyone so far wrote in New York time, so their existing entries'
+        # timestamps are New York wall-clock times.
+        sqlite=["ALTER TABLE users ADD COLUMN timezone TEXT",
+                "UPDATE users SET timezone = 'America/New_York'"],
+        postgres=["ALTER TABLE users ADD COLUMN timezone TEXT",
+                  "UPDATE users SET timezone = 'America/New_York'"],
+    ),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1].version
@@ -192,7 +201,7 @@ def migrate(target, now=None):
             connection.execute("BEGIN IMMEDIATE")
         connection.execute(SCHEMA_MIGRATIONS_TABLE)
         applied = applied_versions(connection)
-        stamp = (now or datetime.now()).isoformat(timespec="seconds")
+        stamp = (now or utc_now()).isoformat(timespec="seconds")
 
         if not applied and not connection.is_postgres and _has_journal_tables(connection):
             connection.execute(

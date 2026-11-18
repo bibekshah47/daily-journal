@@ -3,13 +3,17 @@
 Passwords are only ever passed to werkzeug's hashing functions; they are
 never stored, logged or echoed back into a page.
 """
-from datetime import datetime
 import re
 
 from itsdangerous import BadData, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import IntegrityError
+from timeutil import (DEFAULT_TIMEZONE, is_valid_timezone, normalize_timezone, now_in,
+                      utc_now)
+
+# What the app needs about a user on every request (see views/auth.User).
+USER_COLUMNS = "id, email, display_name, session_version, timezone"
 
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 128
@@ -76,44 +80,48 @@ def password_error(password):
     return None
 
 
-def create_user(connection, email, password, display_name=None, now=None):
+def create_user(connection, email, password, display_name=None, timezone=None, now=None):
     """Insert a user (email and name already normalized and checked). Returns the new id.
 
+    `timezone` is the browser's guess; an invalid or missing one is stored as
+    UTC. created_at is system time (UTC); password_changed_at is shown to the
+    user, so it is their own wall-clock time.
     Raises EmailTaken if the email is in use. Does not commit.
     """
-    created = (now or datetime.now()).isoformat()
+    timezone = normalize_timezone(timezone)
+    created = (now or utc_now()).isoformat()
     try:
         return connection.insert(
-            "INSERT INTO users (email, password_hash, created_at, display_name, password_changed_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (email, generate_password_hash(password), created, display_name, created))
+            "INSERT INTO users (email, password_hash, created_at, display_name, "
+            "password_changed_at, timezone) VALUES (?, ?, ?, ?, ?, ?)",
+            (email, generate_password_hash(password), created, display_name,
+             now_in(timezone).isoformat(), timezone))
     except IntegrityError as error:
         # On PostgreSQL the transaction is now aborted: the caller rolls back.
         raise EmailTaken(email) from error
 
 
 def find_user(connection, user_id):
-    """(id, email, display_name, session_version) for a user id, or None."""
+    """(id, email, display_name, session_version, timezone) for a user id, or None."""
     return connection.execute(
-        "SELECT id, email, display_name, session_version FROM users WHERE id = ?",
-        (user_id,)).fetchone()
+        f"SELECT {USER_COLUMNS} FROM users WHERE id = ?", (user_id,)).fetchone()
 
 
 def find_user_by_email(connection, email):
     """(id, email, display_name, session_version) for an email, or None."""
     return connection.execute(
-        "SELECT id, email, display_name, session_version FROM users WHERE email = ?",
-        (normalize_email(email),)).fetchone()
+        f"SELECT {USER_COLUMNS} FROM users WHERE email = ?", (normalize_email(email),)).fetchone()
 
 
 def authenticate(connection, email, password):
-    """(id, email, display_name, session_version) if the email and password
-    match an account, else None."""
+    """(id, email, display_name, session_version, timezone) if the email and
+    password match an account, else None."""
     global _dummy_hash
     if len(password) > MAX_PASSWORD_LENGTH:
         return None   # never spend time hashing absurdly long input
     row = connection.execute(
-        "SELECT id, email, password_hash, display_name, session_version FROM users WHERE email = ?",
+        "SELECT id, email, password_hash, display_name, session_version, timezone "
+        "FROM users WHERE email = ?",
         (normalize_email(email),)).fetchone()
     if row is None:
         if _dummy_hash is None:
@@ -122,7 +130,7 @@ def authenticate(connection, email, password):
         return None
     if not check_password_hash(row[2], password):
         return None
-    return row[0], row[1], row[3], row[4]
+    return row[0], row[1], row[3], row[4], row[5]
 
 
 # ---------- Settings ----------
@@ -152,6 +160,27 @@ def change_email(connection, user_id, email):
         raise EmailTaken(email) from error
 
 
+def set_timezone(connection, user_id, timezone):
+    """Store a time zone (already validated). Commits."""
+    with connection:
+        connection.execute("UPDATE users SET timezone = ? WHERE id = ?",
+                           (normalize_timezone(timezone), user_id))
+
+
+def adopt_browser_timezone(connection, user_id, stored, submitted):
+    """At log in: store the browser's time zone only if the user has none
+    yet (or the UTC fallback), so a zone chosen in Settings survives logging
+    in while traveling. Returns the zone now in effect. Commits if changed."""
+    submitted = str(submitted or "").strip()
+    if stored and stored != DEFAULT_TIMEZONE:
+        return stored
+    submitted = normalize_timezone(submitted) if is_valid_timezone(submitted) else None
+    if submitted and submitted != stored:
+        set_timezone(connection, user_id, submitted)
+        return submitted
+    return normalize_timezone(stored)
+
+
 def password_changed_at(connection, user_id):
     """When the password was last set (ISO text), or None if not recorded."""
     row = connection.execute(
@@ -163,13 +192,18 @@ def set_password(connection, user_id, password, now=None):
     """Store a new password and end every session and reset link.
 
     Increases session_version, so logins (including "Keep me logged in"
-    cookies) made before this stop working. Returns the new version. Commits.
+    cookies) made before this stop working. password_changed_at is the
+    user's own wall-clock time (works for a logged-out reset too).
+    Returns the new version. Commits.
     """
+    if now is None:
+        row = connection.fetchone("SELECT timezone FROM users WHERE id = ?", (user_id,))
+        now = now_in(row[0] if row else DEFAULT_TIMEZONE)
     with connection:
         connection.execute(
             "UPDATE users SET password_hash = ?, session_version = session_version + 1, "
             "password_changed_at = ? WHERE id = ?",
-            (generate_password_hash(password), (now or datetime.now()).isoformat(), user_id))
+            (generate_password_hash(password), now.isoformat(), user_id))
         return connection.execute(
             "SELECT session_version FROM users WHERE id = ?", (user_id,)).fetchone()[0]
 

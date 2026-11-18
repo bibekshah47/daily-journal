@@ -8,8 +8,8 @@ REFLECTION_QUESTIONS = (
 )
 
 
-def get_journal_stats(connection, today=None, *, user_id):
-    today = today or date.today()
+def get_journal_stats(connection, today, *, user_id):
+    """Streaks and counts for user_id, as of `today` (the user's own date)."""
     rows = connection.execute('''
         SELECT created_at, went_well, went_wrong, improve_tomorrow FROM live_entries
         WHERE user_id = ?

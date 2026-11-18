@@ -1,5 +1,4 @@
 """Backup & export: downloads, and restoring a JSON backup."""
-from datetime import datetime
 import io
 
 from flask import (Blueprint, current_app, flash, redirect, render_template,
@@ -12,6 +11,7 @@ from backup import (RestoreError, entries_to_json, entries_to_markdown,
 from config import MAX_UPLOAD_MB
 from db import get_db, uses_postgres
 from tags import get_tags_for_entries
+from timeutil import user_now
 from views.shared import user_id
 
 bp = Blueprint("backup", __name__)
@@ -69,7 +69,7 @@ def backup_page():
 
 @bp.route("/backup/export.md")
 def export_markdown():
-    now = datetime.now()
+    now = user_now()   # names the file and dates the export in the user's time
     text = entries_to_markdown(*all_entries_newest_first(), now)
     return download_response(text.encode("utf-8"), "md",
                              "text/markdown", now)
@@ -77,7 +77,7 @@ def export_markdown():
 
 @bp.route("/backup/export.json")
 def export_json():
-    now = datetime.now()
+    now = user_now()   # names the file and dates the export in the user's time
     text = entries_to_json(*all_entries_newest_first(), now)
     return download_response(text.encode("utf-8"), "json",
                              "application/json", now)

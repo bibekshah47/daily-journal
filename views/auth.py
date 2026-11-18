@@ -5,13 +5,15 @@ from flask import (Blueprint, current_app, flash, redirect, render_template,
 from flask_login import (LoginManager, UserMixin, current_user, login_user,
                          logout_user)
 
-from accounts import (RESET_MAX_AGE, EmailTaken, authenticate, create_user,
+from accounts import (RESET_MAX_AGE, EmailTaken, adopt_browser_timezone,
+                      authenticate, create_user,
                       display_name_error, email_error, find_user,
                       find_user_by_email, make_reset_token,
                       normalize_display_name, normalize_email, password_error,
                       set_password, user_for_reset_token)
 from db import get_db
 from mailer import send_email
+from timeutil import normalize_timezone
 from security import (FAILED_LOGIN_MESSAGE, FORGOT_LIMITS, LOGIN_LIMITS,
                       SIGNUP_LIMITS, TOO_MANY_MESSAGE, clear_failed_logins,
                       client_ip, email_key, forgot_email_allowed, limiter,
@@ -34,12 +36,17 @@ FORGOT_MESSAGE = ("If an account exists for that email, we've sent a link to res
 
 
 class User(UserMixin):
-    def __init__(self, user_id, email, display_name=None, session_version=0):
+    """Built from accounts.USER_COLUMNS: id, email, display_name,
+    session_version, timezone."""
+
+    def __init__(self, user_id, email, display_name=None, session_version=0, timezone=None):
         self.id = user_id
         self.email = email
         # Plain text from the user: templates show it autoescaped, never |safe.
         self.display_name = display_name
         self.session_version = session_version
+        # Validated when stored; timeutil treats missing or invalid as UTC.
+        self.timezone = timezone
 
     def get_id(self):
         """What Flask-Login stores in the session and remember cookie.
@@ -132,13 +139,15 @@ def signup():
         if not errors:
             connection = get_db()
             try:
-                new_id = create_user(connection, email, password, display_name)
+                # The browser's time zone, from the form's hidden field.
+                timezone = normalize_timezone(request.form.get("timezone"))
+                new_id = create_user(connection, email, password, display_name, timezone)
                 connection.commit()
             except EmailTaken:
                 connection.rollback()
                 errors["email_taken"] = True
             else:
-                start_session(User(new_id, email, display_name))
+                start_session(User(new_id, email, display_name, 0, timezone))
                 flash("Welcome! Your journal is ready.")
                 return redirect(url_for("entries.home"))
 
@@ -174,7 +183,11 @@ def login():
             error = FAILED_LOGIN_MESSAGE
         else:
             clear_failed_logins(connection, key)
-            start_session(User(*user), remember=request.form.get("remember") == "1")
+            user_id, user_email, display_name, session_version, stored_zone = user
+            timezone = adopt_browser_timezone(connection, user_id, stored_zone,
+                                              request.form.get("timezone"))
+            start_session(User(user_id, user_email, display_name, session_version, timezone),
+                          remember=request.form.get("remember") == "1")
             return redirect(next_path or url_for("entries.home"))
 
     return render_template("login.html", email=email, error=error,
@@ -206,7 +219,7 @@ def forgot_password():
 
 
 def send_reset_email(user):
-    user_id, email, display_name, session_version = user
+    user_id, email, display_name, session_version, _ = user
     token = make_reset_token(current_app.config["SECRET_KEY"], user_id, session_version)
     # https in production even behind a proxy that talks to the app over http.
     link = url_for("auth.reset_password", token=token, _external=True,
@@ -236,7 +249,7 @@ def reset_password(token):
         if error is None:
             version = set_password(connection, user[0], password)
             clear_failed_logins(connection, email_key(user[1]))
-            start_session(User(user[0], user[1], user[2], version))
+            start_session(User(user[0], user[1], user[2], version, user[4]))
             flash("Password updated.")
             return redirect(url_for("entries.home"))
     return render_template("reset.html", expired=False, error=error), 400 if error else 200

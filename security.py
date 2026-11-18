@@ -19,6 +19,8 @@ from limits.storage import MemoryStorage
 from limits.strategies import MovingWindowRateLimiter
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from timeutil import utc_now
+
 csrf = CSRFProtect()
 
 # Per client IP. In memory, so each server process counts separately and a
@@ -117,7 +119,7 @@ def login_locked(connection, key, now=None):
     row = connection.execute(
         "SELECT locked_until FROM login_throttle WHERE email_hash = ?", (key,)).fetchone()
     locked_until = _parse(row[0]) if row else None
-    return locked_until is not None and locked_until > (now or datetime.now())
+    return locked_until is not None and locked_until > (now or utc_now())
 
 
 def record_failed_login(connection, key, now=None):
@@ -127,7 +129,7 @@ def record_failed_login(connection, key, now=None):
     counted on both SQLite and PostgreSQL. Timestamps are ISO text, which
     sorts in time order.
     """
-    now = now or datetime.now()
+    now = now or utc_now()   # system time: lockouts don't depend on anyone's zone
     window_cutoff = (now - LOCKOUT_WINDOW).isoformat()
     with connection:
         # Forget emails whose lockout and counting window are both over.

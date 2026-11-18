@@ -19,7 +19,7 @@ from migrations import migrate
 # Parents before children, so foreign keys are satisfied as rows arrive.
 TABLES = (
     ("users", ("id", "email", "password_hash", "created_at", "display_name",
-               "session_version", "password_changed_at")),
+               "session_version", "password_changed_at", "timezone")),
     ("entries", ("id", "content", "created_at", "mood", "content_html", "title",
                  "is_favorite", "went_well", "went_wrong", "improve_tomorrow",
                  "deleted_at", "user_id")),

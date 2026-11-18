@@ -23,6 +23,7 @@ Mood names, emoji and colors are defined once in `MOODS` in `views/shared.py`.
 | `accounts.py` | Email and password rules, password hashing, reset tokens, claiming old entries |
 | `security.py` | CSRF, rate limits, login lockout, security headers |
 | `mailer.py` | Sends email (printed to the terminal in development) |
+| `timeutil.py` | The user's clock (their time zone) and the system clock (UTC) |
 | `database.py` | Connections to SQLite or PostgreSQL behind one API, and `?` placeholder conversion |
 | `migrations.py` | Numbered schema migrations for both databases |
 | `copy_to_postgres.py` | The `copy-sqlite-to-postgres` command |
@@ -67,6 +68,28 @@ so nothing that names a deleted account can reach a new one.
 says the same thing whether or not the email has an account. Note that the
 automatic daily backups (kept 14 days) still contain a deleted account until
 they rotate out.
+
+### Time zones
+
+The server can run on UTC, but a journal's "today" is the writer's day. Each
+user has a time zone (`users.timezone`): sign up and log in send the
+browser's zone in a hidden field, and Settings has a **Time zone** row to
+change it (with "Use this device's time zone"). Logging in only fills in a
+missing or `UTC` zone, so a zone chosen in Settings isn't replaced while
+traveling. Unknown zones fall back to `UTC`; accounts from before time zones
+were set to `America/New_York`, the time their entries were written in. Old
+zone names that some browsers still report (Chrome says `Asia/Calcutta`) are
+stored by their current name (`Asia/Kolkata`), using tzdata's list of aliases.
+
+`timeutil.py` holds both clocks. `user_now()` and `user_today()` (the
+greeting, today's entry, the 14-day strip, streaks, Insights, the week,
+On this day, History's today, new entries, Trash dates, export names) give
+the user's wall-clock time. `utc_now()` serves system work: login lockouts,
+account `created_at`, migrations, the daily SQLite backup, and the Trash
+cleanup, which allows one extra day so time zones behind UTC never lose an
+entry early. Timestamps stay naive ISO text, as before. Only `timeutil.clock()`
+reads the real time, so tests freeze it with `helpers.freeze_time`, and the test
+run uses `TZ=UTC` like a production server.
 
 ### Security protections (security.py)
 

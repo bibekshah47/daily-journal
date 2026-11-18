@@ -1,5 +1,5 @@
 """Accounts and data isolation, using temporary databases only."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import hashlib
 import importlib
 import io
@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 from database import connect, initialize_database
 from memories import subtract_months
 from tags import set_entry_tags
-from tests.helpers import SECURITY_OFF, TEST_PASSWORD, add_user, log_in_as, new_test_database, signed_in_client, skip_daily_maintenance, sqlite_only
+from tests.helpers import (SECURITY_OFF, TEST_PASSWORD, add_user, freeze_time, log_in_as, new_test_database, signed_in_client, skip_daily_maintenance, sqlite_only)
 
 
 def login_target(location):
@@ -202,16 +202,9 @@ class LoginTests(AuthTestCase):
 
 class DisplayNameTests(AuthTestCase):
     def at_hour(self, hour):
-        """Pin the clock Home uses to pick the greeting."""
-        real = importlib.import_module('views.entries').datetime
-
-        class Clock(real):
-            @classmethod
-            def now(cls, tz=None):
-                return real(2026, 11, 17, hour, 30)
-        patcher = mock.patch('views.entries.datetime', Clock)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        """Pin the clock Home uses to pick the greeting. These users have no
+        time zone (UTC), so this is also their wall-clock hour."""
+        freeze_time(self, datetime(2026, 11, 17, hour, 30))
 
     def h1(self, client=None):
         page = (client or self.client).get('/').text

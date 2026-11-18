@@ -109,6 +109,28 @@
         {{ actions('Save') }}
     </form>
     {% endcall %}
+
+    {% call row('timezone', 'Time zone', current_timezone) %}
+    <form method="POST" action="{{ url_for('settings.change_timezone') }}" class="settings-form" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ section_error('timezone') }}
+        <div class="auth-field">
+            <label for="timezone">Time zone</label>
+            <select id="timezone" name="timezone" {{ described_by('timezone', true) }}>
+                {% for name in timezone_choices %}
+                <option value="{{ name }}"{% if timezone_aliases.get(name) %} data-aliases="{{ timezone_aliases[name] }}"{% endif %} {% if name == values.timezone %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+            </select>
+            {{ field_message('timezone', 'Today, streaks, the week and new entries follow this time zone.') }}
+        </div>
+        <p class="settings-device-zone">
+            {# Shown by the script, which knows the browser's zone. #}
+            <button type="button" class="text-button" id="use-device-timezone" hidden>Use this device's time zone</button>
+            <span id="device-timezone-status" class="settings-note" role="status" aria-live="polite"></span>
+        </p>
+        {{ actions('Save') }}
+    </form>
+    {% endcall %}
 </div>
 
 <p class="settings-line">Download your entries any time from
@@ -178,7 +200,7 @@
                     if (other !== section && other.open) other.open = false;
                 });
                 const field = section.querySelector('[aria-invalid="true"]') ||
-                              section.querySelector('input:not([type="hidden"])');
+                              section.querySelector('input:not([type="hidden"]), select, textarea');
                 if (field) field.focus();
             });
 
@@ -193,6 +215,34 @@
                 section.open = false;
                 section.querySelector("summary").focus();
             });
+        });
+    })();
+
+    (function () {
+        // "Use this device's time zone": select the browser's zone in the menu.
+        const button = document.getElementById("use-device-timezone");
+        const select = document.getElementById("timezone");
+        const status = document.getElementById("device-timezone-status");
+        let zone = "";
+        try {
+            zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+        } catch (error) {}
+        if (!button || !select || !zone) return;
+        button.hidden = false;
+        button.addEventListener("click", function () {
+            // Browsers sometimes report an old name (Asia/Calcutta); the menu
+            // lists current names, with the old ones in data-aliases.
+            const match = Array.from(select.options).find(function (option) {
+                return option.value === zone ||
+                    (option.dataset.aliases || "").split(" ").indexOf(zone) !== -1;
+            });
+            if (match) {
+                select.value = match.value;
+                status.textContent = "Selected " + match.value + ". Save to keep it.";
+            } else {
+                status.textContent = "This device's time zone (" + zone + ") isn't in the list.";
+            }
+            select.focus();
         });
     })();
 

@@ -1,5 +1,5 @@
 """Home, writing, reading and editing entries, favorites, and Trash."""
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 
 from flask import (Blueprint, abort, flash, redirect, render_template, request,
                    url_for)
@@ -13,6 +13,7 @@ from memories import get_memories
 from rich_text import prepare_content
 from tags import get_tags_for_entries, parse_tags, set_entry_tags
 from templates_data import WRITING_TEMPLATES
+from timeutil import user_now, user_today
 from trash import TRASH_DAYS, empty_trash, purge_entry
 from views.shared import (REFLECTION_FIELDS, attach_tags, entry_summary,
                           owned_entry_or_404, parse_timestamp, safe_next_url,
@@ -35,17 +36,19 @@ WRITING_PROMPTS = [
 ]
 
 
-def todays_prompt():
-    return WRITING_PROMPTS[date.today().toordinal() % len(WRITING_PROMPTS)]
+def todays_prompt(today):
+    """The prompt for `today` (the user's day): the same one all day."""
+    return WRITING_PROMPTS[today.toordinal() % len(WRITING_PROMPTS)]
 
 
 # Home Dashboard
 @bp.route("/")
 def home():
 
-    # Get today's date and current time
-    today = date.today()
-    current_hour = datetime.now().hour
+    # The user's own date and time, wherever the server is.
+    now = user_now()
+    today = now.date()
+    current_hour = now.hour
 
     # Choose a greeting based on the time
     if current_hour < 12:
@@ -101,7 +104,7 @@ def home():
             "mood": day_moods.get(day.isoformat(), ""),
         })
 
-    prompt = WRITING_PROMPTS[today.toordinal() % len(WRITING_PROMPTS)]
+    prompt = todays_prompt(today)
 
     # Display the Home Dashboard
     return render_template(
@@ -145,12 +148,13 @@ def write_journal():
                 tag_suggestions=tag_suggestions(),
                 content=content,
                 content_html=content_html,
-                prompt=todays_prompt(),
+                prompt=todays_prompt(user_today()),
                 writing_templates=WRITING_TEMPLATES,
                 **reflections
             ), 400
 
-        created_at = datetime.now().isoformat()
+        # The writer's wall-clock time, like every existing entry.
+        created_at = user_now().isoformat()
 
         connection = get_db()
         entry_id = connection.insert("""
@@ -175,7 +179,7 @@ def write_journal():
         tags=[],
         tag_suggestions=tag_suggestions(),
         content="",
-        prompt=todays_prompt(),
+        prompt=todays_prompt(user_today()),
         writing_templates=WRITING_TEMPLATES,
         **{field: "" for field in REFLECTION_FIELDS}
     )
@@ -308,7 +312,7 @@ def delete_entry(entry_id):
         moved = connection.execute(
             "UPDATE entries SET deleted_at = ? "
             "WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
-            (datetime.now().isoformat(), entry_id, user_id()),
+            (user_now().isoformat(), entry_id, user_id()),
         ).rowcount
 
     if moved:
@@ -343,7 +347,7 @@ def erase_in_days(deleted_at, today):
 
 @bp.route("/trash")
 def trash():
-    today = date.today()
+    today = user_today()
     rows = get_db().execute("""
         SELECT * FROM entries
         WHERE user_id = ? AND deleted_at IS NOT NULL

@@ -73,13 +73,13 @@ def latest_backup_time(database_path):
     return datetime.fromtimestamp(backups[-1].stat().st_mtime)
 
 
-def run_daily_backup(database_path, today=None, keep=KEEP_DAILY_BACKUPS):
-    """Create today's backup if it is missing, then prune old ones.
+def run_daily_backup(database_path, today, keep=KEEP_DAILY_BACKUPS):
+    """Create `today`'s backup if it is missing, then prune old ones. The
+    caller passes the day (the UTC day: backups are system work).
 
     Returns the path of the backup that was created, or None if today's
     backup already existed (or the database doesn't exist yet).
     """
-    today = today or date.today()
     if not Path(database_path).exists():
         return None
     folder = backup_folder(database_path)

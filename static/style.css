@@ -1022,7 +1022,7 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
 .auth-form { display: flex; flex-direction: column; gap: 18px; }
 .auth-form .form-error { margin: 0; }
 .auth-field label { display: block; margin-bottom: 6px; font-size: var(--text-sm); font-weight: 600; }
-.auth-field input {
+.auth-field input, .auth-field select {
     width: 100%;
     min-height: 44px;
     padding: 10px 14px;
@@ -1032,8 +1032,8 @@ a.entry-row:hover, .entry-row.has-actions:hover { border-color: var(--rule-stron
     color: var(--ink);
     font: inherit;
 }
-.auth-field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.auth-field input[aria-invalid="true"] { border-color: var(--danger); }
+.auth-field input:focus, .auth-field select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.auth-field input[aria-invalid="true"], .auth-field select[aria-invalid="true"] { border-color: var(--danger); }
 .password-box { position: relative; }
 .password-box input { padding-right: 120px; }
 .password-toggle { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); font-size: var(--text-xs); }
@@ -1469,6 +1469,8 @@ details[name="settings-section"]:not([open]) > :not(summary) { display: none; }
 .settings-note { font-size: var(--text-sm); color: var(--ink-soft); }
 .settings-note a, .settings-line a { font-weight: 600; }
 .settings-line { margin-top: 16px; font-size: var(--text-sm); color: var(--ink-soft); }
+.settings-device-zone { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: -6px; }
+.settings-device-zone:has(button[hidden]):has(span:empty) { display: none; }
 
 /* Delete: apart from everything else, behind a quiet danger-colored toggle */
 .settings-delete { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--rule); }

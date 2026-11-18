@@ -5,6 +5,7 @@ from flask import Blueprint, render_template, request
 
 from db import get_db
 from journal_insights import REFLECTION_QUESTIONS, get_journal_stats
+from timeutil import user_today
 from views.shared import MOODS, user_id
 from weekly import get_week_review, week_bounds, week_label
 
@@ -14,7 +15,7 @@ bp = Blueprint("insights", __name__)
 @bp.route("/insights")
 def insights():
     connection = get_db()
-    stats = get_journal_stats(connection, user_id=user_id())
+    stats = get_journal_stats(connection, user_today(), user_id=user_id())
     mood_counts = dict(connection.execute(
         "SELECT mood, COUNT(*) FROM live_entries "
         "WHERE user_id = ? AND mood IS NOT NULL AND mood != '' GROUP BY mood",
@@ -31,7 +32,8 @@ def insights():
 @bp.route("/week")
 def week():
     """Weekly review. ?start=YYYY-MM-DD snaps to its Sunday; anything else shows this week."""
-    this_week, _ = week_bounds(date.today())
+    today = user_today()
+    this_week, _ = week_bounds(today)
     try:
         start, _ = week_bounds(date.fromisoformat(request.args.get("start", "").strip()))
         if start > this_week:
@@ -49,7 +51,7 @@ def week():
         "week.html",
         review=review,
         week_label=week_label(start),
-        today=date.today(),
+        today=today,
         questions=REFLECTION_QUESTIONS,
         previous_start=previous_start.isoformat(),
         next_start=next_start.isoformat() if next_start else None,

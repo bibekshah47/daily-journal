@@ -98,16 +98,17 @@ class SettingsPageTests(AccountTestCase):
         rows = re.findall(r'<span class="settings-label">([^<]+)<span class="visually-hidden">:</span>'
                           r'</span>\s*(?:<span class="settings-value[^"]*">([^<]*)</span>)?', page)
         self.assertEqual(rows, [('Name', 'Ann Lee'), ('Email', TEST_EMAIL),
-                                ('Password', 'Last changed March 4, 2026')])
-        self.assertEqual(page.count('<span class="settings-change">Change</span>'), 3)
+                                ('Password', 'Last changed March 4, 2026'),
+                                ('Time zone', 'UTC')])   # this test user has none stored
+        self.assertEqual(page.count('<span class="settings-change">Change</span>'), 4)
         found = sections(page)
-        self.assertEqual(list(found), ['name', 'email', 'password', 'delete'])
+        self.assertEqual(list(found), ['name', 'email', 'password', 'timezone', 'delete'])
         self.assertFalse(any(is_open for is_open, _ in found.values()))
         self.assertIn('<summary class="settings-delete-toggle">Delete account…</summary>', page)
         self.assertIn('Download your entries any time from', page)
         self.assertIn('href="/backup">Backup &amp; export</a>.', page)
-        # Name, Email, Password and Delete forms, plus the sidebar's Log out.
-        self.assertEqual(page.count('name="csrf_token"'), 5)
+        # Name, Email, Password, Time zone and Delete forms, plus the sidebar's Log out.
+        self.assertEqual(page.count('name="csrf_token"'), 6)
         self.assertIn('id="delete-account-dialog"', page)
         self.assertIn('Save', found['name'][1])
         self.assertIn('Cancel', found['name'][1])
