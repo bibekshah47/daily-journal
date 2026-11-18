@@ -10,7 +10,7 @@ import unittest
 
 from database import initialize_database
 from journal_insights import get_journal_stats
-from tests.helpers import signed_in_client
+from tests.helpers import SECURITY_OFF, signed_in_client
 
 
 class InsightsTests(unittest.TestCase):
@@ -99,7 +99,7 @@ class InsightsTests(unittest.TestCase):
             os.environ['JOURNAL_DATABASE'] = path
             app = importlib.import_module('app').app
             previous_config = app.config['DATABASE']
-            app.config.update(TESTING=True, DATABASE=path)
+            app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=path)
             try:
                 client, user_id = signed_in_client(app, path)
                 page = client.get('/insights')

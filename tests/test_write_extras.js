@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const editorCode = fs.readFileSync('static/journal-editor.js', 'utf8');
 const extrasCode = fs.readFileSync('static/write-extras.js', 'utf8');
 const template = fs.readFileSync('templates/write.html', 'utf8');
-const draftCode = [...template.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1];
+const draftCode = [...template.matchAll(/<script nonce="{{ csp_nonce }}">([\s\S]*?)<\/script>/g)][0][1];
 
 const TEMPLATES = [
     {key: 'gratitude', name: 'Gratitude',

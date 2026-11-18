@@ -46,6 +46,23 @@ Unsaved Write drafts live in the browser under a key that includes the user id.
 
 "Keep me logged in" lasts 30 days. Cookies are `HttpOnly` and `SameSite=Lax`,
 and `Secure` when `APP_ENV=production`, so production must be served over HTTPS.
+A session cookie used from a different IP address or browser is dropped
+(Flask-Login "strong" protection), so moving networks can mean logging in again.
+
+### Security protections (security.py)
+
+- **CSRF:** every POST form carries a token (Flask-WTF). A missing or expired
+  token shows "This page was open too long" (400). Write drafts survive in the browser.
+- **Rate limits** (per IP, Flask-Limiter, in memory): log in 5/minute and 30/hour,
+  sign up 5/hour. Counts are per server process and reset on restart.
+- **Lockout:** 10 failed logins for one email within 15 minutes lock that email
+  for 15 minutes (stored in the `login_throttle` table as a keyed hash, never the
+  email). Unknown emails behave identically.
+- **Headers:** a strict Content-Security-Policy with a per-request nonce, so every
+  inline `<script>` needs `nonce="{{ csp_nonce }}"` and inline `on…=` handlers
+  don't run. HSTS is sent in production.
+- **Proxy:** in production the client IP comes from `X-Forwarded-For` (one proxy, as on Render).
+- Failed logins and rate-limit hits are logged with the IP and a short email hash only.
 
 ### Upgrading a journal from before accounts
 

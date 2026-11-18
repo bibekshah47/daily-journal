@@ -7,15 +7,16 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/quill/quill.snow.css') }}">
-<script defer src="{{ url_for('static', filename='vendor/quill/quill.js') }}"></script>
-<script defer src="{{ url_for('static', filename='journal-editor.js') }}"></script>
-<script defer src="{{ url_for('static', filename='write-extras.js') }}"></script>
+<script nonce="{{ csp_nonce }}" defer src="{{ url_for('static', filename='vendor/quill/quill.js') }}"></script>
+<script nonce="{{ csp_nonce }}" defer src="{{ url_for('static', filename='journal-editor.js') }}"></script>
+<script nonce="{{ csp_nonce }}" defer src="{{ url_for('static', filename='write-extras.js') }}"></script>
 {% endblock %}
 
 {% block content %}
 {{ ui.focus_mode_early() }}
 <form method="POST" action="{{ url_for('entries.write_journal') }}" class="compose" id="write-form"
       data-draft-key="{{ draft_key }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <header class="compose-header">
         <p class="compose-date" id="compose-date"></p>
@@ -45,7 +46,7 @@
             {% endfor %}
         </ul>
     </div>
-    <script type="application/json" id="writing-templates">{{ writing_templates | tojson }}</script>
+    <script nonce="{{ csp_nonce }}" type="application/json" id="writing-templates">{{ writing_templates | tojson }}</script>
 
     {{ ui.editor_fields(content, content_html, prompt) }}
 
@@ -83,7 +84,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
         // One draft per user (the key includes the user id), so people sharing
         // a computer never see each other's drafts.
         const DRAFT_KEY = document.getElementById("write-form").dataset.draftKey;
@@ -298,7 +299,7 @@
 </script>
 {{ ui.mood_picker_script() }}
 {{ ui.tag_field_script() }}
-<script>
+<script nonce="{{ csp_nonce }}">
     // Show today's date in the header, using this computer's clock.
     document.getElementById("compose-date").textContent =
         new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });

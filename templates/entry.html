@@ -14,6 +14,7 @@
     {% if not entry['deleted_at'] %}
     <div class="entry-tools">
         <form action="{{ url_for('entries.toggle_favorite', entry_id=entry['id']) }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="next" value="{{ url_for('entries.view_entry', entry_id=entry['id']) }}">
             <button type="submit" class="icon-button favorite-button {% if entry['is_favorite'] %}is-favorite{% endif %}"
                     aria-pressed="{{ 'true' if entry['is_favorite'] else 'false' }}"
@@ -40,6 +41,7 @@
     <p><strong>This entry is in Trash</strong>
        <span>It will be erased on {{ entry['deleted_at'] | erase_date }}.</span></p>
     <form action="{{ url_for('entries.restore_entry', entry_id=entry['id']) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="next" value="{{ url_for('entries.view_entry', entry_id=entry['id']) }}">
         <button type="submit" class="button button-secondary">
             <i data-lucide="undo-2" aria-hidden="true"></i>
@@ -112,6 +114,7 @@
 <!-- Delete confirmation -->
 <dialog class="dialog" id="delete-dialog" aria-labelledby="delete-title">
     <form action="{{ url_for('entries.delete_entry', entry_id=entry['id']) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <h2 id="delete-title">Delete this entry?</h2>
         <p>It moves to Trash. You can restore it for 30 days.</p>
         <div class="dialog-actions">
@@ -125,7 +128,7 @@
 
 {% block scripts %}
 {% if request.args.get('saved') == '1' %}
-<script>
+<script nonce="{{ csp_nonce }}">
     try {
         if (sessionStorage.getItem("my-journal-save-pending") === "true") {
             localStorage.removeItem({{ draft_key | tojson }});
@@ -136,7 +139,7 @@
     }
 </script>
 {% endif %}
-<script>
+<script nonce="{{ csp_nonce }}">
     const deleteDialog = document.getElementById("delete-dialog");
     if (deleteDialog) {
         document.getElementById("delete-open").addEventListener("click", function () {

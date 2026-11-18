@@ -8,7 +8,7 @@
     <title>{% block title %}My Journal{% endblock %} | My Journal</title>
     {% block head %}{% endblock %}
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="{{ url_for('static', filename='vendor/lucide/lucide.min.js') }}"></script>
+    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='vendor/lucide/lucide.min.js') }}"></script>
 </head>
 <body class="{% block body_class %}{% endblock %}{% if not current_user.is_authenticated %} no-sidebar{% endif %}">
     {% set nav_items = [
@@ -49,6 +49,7 @@
             {% endif %}
             <span class="sidebar-email" title="{{ current_user.email }}">{{ current_user.email }}</span>
             <form method="POST" action="{{ url_for('auth.logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="text-button sidebar-logout">Log out</button>
             </form>
         </div>
@@ -71,6 +72,7 @@
             <span>{{ message }}</span>
             {% if undo_id.isdigit() %}
             <form action="{{ url_for('entries.restore_entry', entry_id=undo_id|int) }}" method="POST" class="toast-action">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
                 <button type="submit" class="toast-button">Undo</button>
             </form>
@@ -82,7 +84,7 @@
     {% endwith %}
 
     {% block scripts %}{% endblock %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
         lucide.createIcons();
         // Fade out "Entry saved" style messages after a few seconds. Toasts with
         // an Undo button stay longer, and never vanish while they have focus.

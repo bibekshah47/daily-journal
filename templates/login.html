@@ -10,6 +10,7 @@
     <h1 id="auth-heading">Log in</h1>
 
     <form method="POST" action="{{ url_for('auth.login') }}" class="auth-form" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% if next_path %}<input type="hidden" name="next" value="{{ next_path }}">{% endif %}
 
         {% if error %}
@@ -42,5 +43,5 @@
 
 {% block scripts %}
 {{ ui.password_toggle_script() }}
-{% if email %}<script>document.getElementById("password").focus();</script>{% endif %}
+{% if email %}<script nonce="{{ csp_nonce }}">document.getElementById("password").focus();</script>{% endif %}
 {% endblock %}

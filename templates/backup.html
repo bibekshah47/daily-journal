@@ -81,6 +81,7 @@
     <h2 id="restore-heading" class="panel-title">Restore from a JSON backup</h2>
     <p class="panel-text">Adds the entries from a JSON backup that aren’t already here. Nothing is overwritten or deleted.</p>
     <form class="restore-form" method="post" action="{{ url_for('backup.restore_backup') }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label for="backup-file">Backup file <span>(.json, up to {{ max_upload_mb }} MB)</span></label>
         <div class="restore-controls">
             <input type="file" id="backup-file" name="backup_file" accept=".json,application/json" required>

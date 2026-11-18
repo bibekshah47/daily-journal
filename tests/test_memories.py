@@ -11,7 +11,7 @@ from unittest import mock
 from database import connect, initialize_database
 from memories import get_memories, subtract_months
 from tags import set_entry_tags
-from tests.helpers import add_user, signed_in_client
+from tests.helpers import SECURITY_OFF, add_user, signed_in_client
 
 TODAY = date(2026, 11, 16)
 
@@ -163,7 +163,7 @@ class HomeMemoryTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.path = str(Path(self.tmp.name) / 'journal.db')
         initialize_database(self.path)
-        self.app.config.update(TESTING=True, DATABASE=self.path)
+        self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=self.path)
         self.client, self.user_id = signed_in_client(self.app, self.path)
 
     def tearDown(self):

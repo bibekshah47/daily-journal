@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const editorCode = fs.readFileSync('static/journal-editor.js', 'utf8');
 const template = fs.readFileSync('templates/write.html', 'utf8');
-const draftCode = [...template.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1];
+const draftCode = [...template.matchAll(/<script nonce="{{ csp_nonce }}">([\s\S]*?)<\/script>/g)][0][1];
 const KEY = 'my-journal-new-entry-draft-7';   // the server puts the user id in the key
 function setup({stored, initial = '', html = '', fail = false, key = KEY, storage: shared} = {}) {
     const elements = {};
@@ -126,7 +126,7 @@ assert.equal(x.elements['journal-editor'].hidden,true);
 
 // ---------- Tag chips (script from templates/_macros.html) ----------
 const macros = fs.readFileSync('templates/_macros.html', 'utf8');
-const tagCode = macros.match(/macro tag_field_script\(\) %}\s*<script>([\s\S]*?)<\/script>/)[1];
+const tagCode = macros.match(/macro tag_field_script\(\) %}\s*<script nonce="{{ csp_nonce }}">([\s\S]*?)<\/script>/)[1];
 function tagSetup(initial = '', suggestions = []) {
     function node(tag) {
         return {

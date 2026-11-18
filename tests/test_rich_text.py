@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 from database import initialize_database
-from tests.helpers import TEST_EMAIL, add_user, log_in_as, signed_in_client
+from tests.helpers import SECURITY_OFF, TEST_EMAIL, add_user, log_in_as, signed_in_client
 from rich_text import clean_html, prepare_content
 
 
@@ -22,7 +22,7 @@ class RichTextTests(unittest.TestCase):
         cls.old_env = os.environ.get('JOURNAL_DATABASE')
         os.environ['JOURNAL_DATABASE'] = cls.path
         cls.module = importlib.import_module('app')
-        cls.module.app.config.update(TESTING=True, DATABASE=cls.path)
+        cls.module.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=cls.path)
 
     @classmethod
     def tearDownClass(cls):

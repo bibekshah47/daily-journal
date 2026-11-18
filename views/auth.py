@@ -1,6 +1,6 @@
 """Sign up, log in and log out. Every other page needs a logged-in user."""
-from flask import (Blueprint, flash, redirect, render_template, request,
-                   url_for)
+from flask import (Blueprint, current_app, flash, redirect, render_template,
+                   request, session, url_for)
 from flask_login import (LoginManager, UserMixin, current_user, login_user,
                          logout_user)
 
@@ -8,11 +8,17 @@ from accounts import (EmailTaken, authenticate, create_user, display_name_error,
                       email_error, find_user, normalize_display_name,
                       normalize_email, password_error)
 from db import get_db
+from security import (FAILED_LOGIN_MESSAGE, LOGIN_LIMITS, SIGNUP_LIMITS,
+                      TOO_MANY_MESSAGE, clear_failed_logins, client_ip,
+                      email_key, limiter, log_label, login_locked,
+                      record_failed_login)
 from views.shared import safe_path
 
 bp = Blueprint("auth", __name__)
 
 login_manager = LoginManager()
+# A session cookie used from a different IP or browser is thrown away.
+login_manager.session_protection = "strong"
 
 # Pages anyone can open. Everything else redirects to /login. Unknown URLs
 # (no endpoint) get the normal 404 page.
@@ -68,7 +74,15 @@ def init_app(app):
     app.before_request(require_login)
 
 
+def start_session(user, remember=False):
+    """Log `user` in with a brand-new session, so nothing set before login
+    (such as a session id planted by someone else) carries over."""
+    session.clear()
+    login_user(user, remember=remember)
+
+
 @bp.route("/signup", methods=["GET", "POST"])
+@limiter.limit(SIGNUP_LIMITS, methods=["POST"])
 def signup():
     if current_user.is_authenticated:
         return redirect(url_for("entries.home"))
@@ -92,7 +106,7 @@ def signup():
                 connection.rollback()
                 errors["email_taken"] = True
             else:
-                login_user(User(new_id, email, display_name))
+                start_session(User(new_id, email, display_name))
                 flash("Welcome! Your journal is ready.")
                 return redirect(url_for("entries.home"))
 
@@ -101,6 +115,7 @@ def signup():
 
 
 @bp.route("/login", methods=["GET", "POST"])
+@limiter.limit(LOGIN_LIMITS, methods=["POST"])
 def login():
     next_path = safe_path(request.values.get("next", ""))
     if current_user.is_authenticated:
@@ -110,11 +125,24 @@ def login():
     error = None
     if request.method == "POST":
         email = normalize_email(request.form.get("email"))
-        user = authenticate(get_db(), email, request.form.get("password", ""))
+        connection = get_db()
+        key = email_key(email)
+        # Locked or not, unknown emails behave exactly like real ones.
+        if login_locked(connection, key):
+            current_app.logger.warning("Login refused (email locked) from %s (email hash %s)",
+                                       client_ip(), log_label(email))
+            return render_template("login.html", email=email,
+                                   error=f"{FAILED_LOGIN_MESSAGE} {TOO_MANY_MESSAGE}",
+                                   next_path=next_path), 429
+        user = authenticate(connection, email, request.form.get("password", ""))
         if user is None:
-            error = "Email or password is incorrect."
+            record_failed_login(connection, key)
+            current_app.logger.warning("Failed login from %s (email hash %s)",
+                                       client_ip(), log_label(email))
+            error = FAILED_LOGIN_MESSAGE
         else:
-            login_user(User(*user), remember=request.form.get("remember") == "1")
+            clear_failed_logins(connection, key)
+            start_session(User(*user), remember=request.form.get("remember") == "1")
             return redirect(next_path or url_for("entries.home"))
 
     return render_template("login.html", email=email, error=error,
@@ -123,6 +151,8 @@ def login():
 
 @bp.route("/logout", methods=["POST"])
 def logout():
+    # Clear first: logout_user() then marks the remember cookie for deletion.
+    session.clear()
     logout_user()
     flash("Logged out.")
     return redirect(url_for("auth.login"))

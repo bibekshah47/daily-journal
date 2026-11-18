@@ -10,7 +10,7 @@ from unittest import mock
 
 from database import connect, initialize_database
 from tags import set_entry_tags
-from tests.helpers import add_user, signed_in_client
+from tests.helpers import SECURITY_OFF, add_user, signed_in_client
 from weekly import get_week_review, week_bounds, week_label
 
 SUNDAY = date(2026, 11, 15)   # the week of Nov 15 – 21, 2026
@@ -176,7 +176,7 @@ class WeekPageTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.path = str(Path(self.tmp.name) / 'journal.db')
         initialize_database(self.path)
-        self.app.config.update(TESTING=True, DATABASE=self.path)
+        self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=self.path)
         self.client, self.user_id = signed_in_client(self.app, self.path)
         # Pin "today" (in the app's daily hook and the /week route), and skip
         # the once-a-day backup/cleanup hook.

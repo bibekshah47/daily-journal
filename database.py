@@ -136,6 +136,16 @@ def initialize_database(database_path="journal.db"):
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS entries_by_user ON entries (user_id, created_at)"
             )
+            # Failed logins per email (keyed by a keyed hash, never the email
+            # itself), so repeated guessing locks that email for a while.
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS login_throttle (
+                    email_hash TEXT PRIMARY KEY,
+                    failures INTEGER NOT NULL DEFAULT 0,
+                    window_start TEXT,
+                    locked_until TEXT
+                )
+            """)
     finally:
         connection.close()
 

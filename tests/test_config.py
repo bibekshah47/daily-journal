@@ -12,7 +12,7 @@ from flask import g
 import config
 from config import ConfigError, DEFAULT_SECRET_KEY, load_config
 from database import initialize_database
-from tests.helpers import signed_in_client
+from tests.helpers import SECURITY_OFF, signed_in_client
 
 
 class ConfigTests(unittest.TestCase):
@@ -82,7 +82,7 @@ class RequestConnectionTests(unittest.TestCase):
         self.path = str(Path(self.tmp.name) / 'journal.db')
         initialize_database(self.path)
         module = importlib.import_module('app')
-        self.app = module.create_app({'TESTING': True, 'DATABASE': self.path})
+        self.app = module.create_app({'TESTING': True, 'DATABASE': self.path, **SECURITY_OFF})
         module._daily_backups_checked.add((os.path.abspath(self.path), date.today()))
 
     def tearDown(self):

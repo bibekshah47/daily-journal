@@ -138,6 +138,7 @@
                 </a>
                 {{ ui.tag_pills(entry.tags, linked=true, class="entry-row-tags") }}
                 <form action="{{ url_for('entries.toggle_favorite', entry_id=entry.id) }}" method="POST" class="favorite-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="search" value="{{ search_query }}">
                     <input type="hidden" name="filter_date" value="{{ filter_date }}">
                     <input type="hidden" name="month" value="{{ displayed_month.strftime('%Y-%m') }}">

@@ -15,7 +15,7 @@ from database import connect, initialize_database
 from tags import (all_tags_with_counts, get_tags_for_entries, normalize_tag,
                   parse_tags, set_entry_tags)
 import backup
-from tests.helpers import add_user, signed_in_client
+from tests.helpers import SECURITY_OFF, add_user, signed_in_client
 
 
 class TagRuleTests(unittest.TestCase):
@@ -81,7 +81,7 @@ class TagAppTests(unittest.TestCase):
         return path
 
     def use_database(self, path):
-        self.app.config.update(TESTING=True, DATABASE=path)
+        self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=path)
         self.client, self.user_id = signed_in_client(self.app, path)
 
     def create(self, journal='Plain body', **fields):

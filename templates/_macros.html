@@ -63,7 +63,7 @@
 
 {# Script for the mood chips; kept separate from the draft script. #}
 {% macro mood_picker_script() %}
-<script>
+<script nonce="{{ csp_nonce }}">
     (function () {
         const hidden = document.getElementById("mood");
         const radios = Array.from(document.querySelectorAll('input[name="mood_picker"]'));
@@ -141,7 +141,7 @@
 {# Script for the tag chips. The rules match tags.py on the server, which
    applies them again, so this is only for showing chips as you type. #}
 {% macro tag_field_script() %}
-<script>
+<script nonce="{{ csp_nonce }}">
     (function () {
         const MAX_TAGS = 5;
         const MAX_LENGTH = 30;
@@ -277,7 +277,7 @@
 {# Focus mode (Write and Edit). Applied before the page paints so a remembered
    focus mode doesn't flash the sidebar; static/write-extras.js does the rest. #}
 {% macro focus_mode_early() %}
-<script>
+<script nonce="{{ csp_nonce }}">
     try {
         if (localStorage.getItem("my-journal-focus-mode") === "on") document.body.classList.add("focus-mode");
     } catch (error) {}
@@ -318,7 +318,7 @@
 
 
 {% macro password_toggle_script() %}
-<script>
+<script nonce="{{ csp_nonce }}">
     (function () {
         const input = document.getElementById("password");
         const toggle = document.getElementById("password-toggle");

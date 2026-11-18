@@ -39,6 +39,7 @@
         </a>
         <div class="entry-row-actions">
             <form action="{{ url_for('entries.restore_entry', entry_id=entry.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="next" value="{{ url_for('entries.trash') }}">
                 <button type="submit" class="button button-secondary">
                     <i data-lucide="undo-2" aria-hidden="true"></i>
@@ -58,6 +59,7 @@
 <!-- Delete one entry forever -->
 <dialog class="dialog" id="purge-dialog" aria-labelledby="purge-title">
     <form method="POST" action="">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <h2 id="purge-title">Delete forever?</h2>
         <p>“<span id="purge-name"></span>” will be erased. This can't be undone.</p>
         <div class="dialog-actions">
@@ -70,6 +72,7 @@
 <!-- Empty the whole trash -->
 <dialog class="dialog" id="empty-dialog" aria-labelledby="empty-title">
     <form action="{{ url_for('entries.empty_trash_route') }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <h2 id="empty-title">Empty trash?</h2>
         <p>{{ entries|length }} {{ 'entry' if entries|length == 1 else 'entries' }} will be erased for good. This can't be undone.</p>
         <div class="dialog-actions">
@@ -89,7 +92,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
     (function () {
         const purgeDialog = document.getElementById("purge-dialog");
         const emptyDialog = document.getElementById("empty-dialog");

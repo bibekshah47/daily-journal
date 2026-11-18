@@ -13,7 +13,7 @@ import unittest
 from database import connect, initialize_database
 from rich_text import clean_html
 from templates_data import WRITING_TEMPLATES
-from tests.helpers import signed_in_client
+from tests.helpers import SECURITY_OFF, signed_in_client
 
 
 class TemplateDataTests(unittest.TestCase):
@@ -49,7 +49,7 @@ class WriteExtrasPageTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.path = str(Path(self.tmp.name) / 'journal.db')
         initialize_database(self.path)
-        self.app.config.update(TESTING=True, DATABASE=self.path)
+        self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=self.path)
         self.client, self.user_id = signed_in_client(self.app, self.path)
         # Skip the once-a-day backup/cleanup hook.
         self.module._daily_backups_checked.add((os.path.abspath(self.path), date.today()))
@@ -77,7 +77,7 @@ class WriteExtrasPageTests(unittest.TestCase):
         self.assertIn('Start from:', page)
         for template in WRITING_TEMPLATES:
             self.assertIn(f'data-template="{template["key"]}">{html.escape(template["name"])}</button>', page)
-        block = re.search(r'<script type="application/json" id="writing-templates">(.*?)</script>', page, re.S)
+        block = re.search(r'<script nonce="[^"]+" type="application/json" id="writing-templates">(.*?)</script>', page, re.S)
         self.assertIsNotNone(block)
         self.assertEqual(json.loads(block.group(1)), WRITING_TEMPLATES)
         # tojson escapes "<", so the HTML can't close the script element early.

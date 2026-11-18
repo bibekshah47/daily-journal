@@ -18,7 +18,7 @@ from journal_insights import get_journal_stats
 from memories import get_memories, subtract_months
 from tags import all_tags_with_counts, set_entry_tags
 from trash import cleanup_trash
-from tests.helpers import signed_in_client
+from tests.helpers import SECURITY_OFF, signed_in_client
 
 
 class TrashTests(unittest.TestCase):
@@ -54,7 +54,7 @@ class TrashTests(unittest.TestCase):
         return path
 
     def use_database(self, path):
-        self.app.config.update(TESTING=True, DATABASE=path)
+        self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=path)
         self.client, self.user_id = signed_in_client(self.app, path)
         # Skip the once-a-day backup/cleanup hook unless a test asks for it.
         self.module._daily_backups_checked.add((os.path.abspath(path), date.today()))

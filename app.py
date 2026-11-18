@@ -18,6 +18,7 @@ import click
 from flask import Flask, current_app, render_template, request
 
 import db
+import security
 from accounts import assign_unowned, find_user_by_email
 from backup import run_daily_backup
 from config import load_config
@@ -111,6 +112,8 @@ def create_app(overrides=None):
     app.before_request(ensure_database_schema)
     app.before_request(ensure_daily_backup)
     auth.init_app(app)   # after the schema check: logging in reads the users table
+    # After the login check, so a logged-out post goes to /login, not the CSRF page.
+    security.init_app(app)
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(entries.bp)

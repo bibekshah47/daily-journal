@@ -13,7 +13,7 @@ from unittest import mock
 
 from database import initialize_database
 import backup
-from tests.helpers import add_user, log_in_as
+from tests.helpers import SECURITY_OFF, add_user, log_in_as
 
 
 ENTRIES = [
@@ -69,7 +69,7 @@ class BackupTests(unittest.TestCase):
         return path
 
     def use_database(self, path):
-        self.app.config.update(TESTING=True, DATABASE=path)
+        self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=path)
         self.client = self.app.test_client()
         log_in_as(self.client, 1)
 

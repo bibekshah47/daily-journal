@@ -60,7 +60,7 @@ def load_config(environ=None):
             "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\"")
 
     production = app_env == "production"
-    return {
+    settings = {
         "APP_ENV": app_env,
         "SECRET_KEY": secret_key or DEFAULT_SECRET_KEY,
         "DATABASE": database_path(environ),
@@ -74,4 +74,10 @@ def load_config(environ=None):
         "REMEMBER_COOKIE_SAMESITE": "Lax",
         "REMEMBER_COOKIE_SECURE": production,
         "REMEMBER_COOKIE_DURATION": timedelta(days=REMEMBER_DAYS),
+        "PREFERRED_URL_SCHEME": "https" if production else "http",
     }
+    if production:
+        # Never run the interactive debugger on a public server, even if
+        # FLASK_DEBUG is set. In development Flask reads FLASK_DEBUG itself.
+        settings["DEBUG"] = False
+    return settings

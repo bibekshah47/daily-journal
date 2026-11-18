@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 from database import connect, initialize_database
 from memories import subtract_months
 from tags import set_entry_tags
-from tests.helpers import TEST_PASSWORD, add_user, log_in_as, signed_in_client
+from tests.helpers import SECURITY_OFF, TEST_PASSWORD, add_user, log_in_as, signed_in_client
 
 
 def login_target(location):
@@ -45,7 +45,7 @@ class AuthTestCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.path = str(Path(self.tmp.name) / 'journal.db')
         initialize_database(self.path)
-        self.app.config.update(TESTING=True, DATABASE=self.path)
+        self.app.config.update(TESTING=True, **SECURITY_OFF, DATABASE=self.path)
         self.client = self.app.test_client()
         # Skip the once-a-day backup/cleanup hook.
         self.module._daily_backups_checked.add((os.path.abspath(self.path), date.today()))
@@ -527,7 +527,10 @@ class IsolationTests(AuthTestCase):
     def test_missing_entry_is_the_same_404(self):
         missing = self.b.get('/entry/99999')
         other = self.b.get(f'/entry/{self.a_today}')
-        self.assertEqual((missing.status_code, missing.text), (other.status_code, other.text))
+        # The CSP nonce is random on every response; everything else must match.
+        def page(response):
+            return response.status_code, re.sub(r'nonce="[^"]+"', 'nonce=""', response.text)
+        self.assertEqual(page(missing), page(other))
 
     def test_restore_gives_entries_to_the_restorer_and_checks_only_their_duplicates(self):
         exported = self.a.get('/backup/export.json').data

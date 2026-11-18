@@ -10,6 +10,14 @@
     <h1 id="auth-heading">Create an account</h1>
 
     <form method="POST" action="{{ url_for('auth.signup') }}" class="auth-form" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        {% if errors.get('too_many') %}
+        <div class="form-error" role="alert">
+            <i data-lucide="circle-alert" aria-hidden="true"></i>
+            <span>{{ errors.too_many }}</span>
+        </div>
+        {% endif %}
         <div class="auth-field">
             <label for="display_name">What should we call you?</label>
             <input type="text" id="display_name" name="display_name" value="{{ display_name }}"
@@ -50,5 +58,5 @@
 
 {% block scripts %}
 {{ ui.password_toggle_script() }}
-{% if errors.get('password') and not (errors.get('display_name') or errors.get('email') or errors.get('email_taken')) %}<script>document.getElementById("password").focus();</script>{% endif %}
+{% if errors.get('password') and not (errors.get('display_name') or errors.get('email') or errors.get('email_taken')) %}<script nonce="{{ csp_nonce }}">document.getElementById("password").focus();</script>{% endif %}
 {% endblock %}

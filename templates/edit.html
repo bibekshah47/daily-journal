@@ -7,9 +7,9 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/quill/quill.snow.css') }}">
-<script defer src="{{ url_for('static', filename='vendor/quill/quill.js') }}"></script>
-<script defer src="{{ url_for('static', filename='journal-editor.js') }}"></script>
-<script defer src="{{ url_for('static', filename='write-extras.js') }}"></script>
+<script nonce="{{ csp_nonce }}" defer src="{{ url_for('static', filename='vendor/quill/quill.js') }}"></script>
+<script nonce="{{ csp_nonce }}" defer src="{{ url_for('static', filename='journal-editor.js') }}"></script>
+<script nonce="{{ csp_nonce }}" defer src="{{ url_for('static', filename='write-extras.js') }}"></script>
 {% endblock %}
 
 {% block content %}
@@ -21,6 +21,7 @@
 
 <form method="POST" action="{{ url_for('entries.edit_entry', entry_id=entry['id']) }}"
       class="compose" id="edit-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <header class="compose-header">
         <p class="compose-date">Editing your entry from {{ entry['created_at'] | friendly_date(true) }}</p>
@@ -65,7 +66,7 @@
 {% block scripts %}
 {{ ui.mood_picker_script() }}
 {{ ui.tag_field_script() }}
-<script>
+<script nonce="{{ csp_nonce }}">
     const form = document.getElementById("edit-form");
     const journalTextarea = document.getElementById("journal");
     const wordCount = document.getElementById("word-count");
