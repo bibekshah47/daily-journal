@@ -1,8 +1,10 @@
 """Sending email (password reset links).
 
-In development, or when MAIL_SERVER isn't set, emails are printed to the
-terminal instead of sent. Otherwise they go out over SMTP with STARTTLS,
-using MAIL_SERVER, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD and MAIL_FROM.
+In development, emails are printed to the terminal instead of sent. In
+production they go out over SMTP with STARTTLS, using MAIL_SERVER, MAIL_PORT,
+MAIL_USERNAME, MAIL_PASSWORD and MAIL_FROM; without MAIL_SERVER they are not
+sent (and never printed: a reset email holds a secret link), only logged as
+not sent.
 
 Sending never breaks a request: real sends happen on a background thread
 (so a slow mail server doesn't slow the page down, and response times don't
@@ -32,9 +34,11 @@ def send_email(to, subject, text_body):
             outbox.append({"to": to, "subject": subject, "body": text_body})
             return None
 
-        if config["APP_ENV"] == "development" or not config.get("MAIL_SERVER"):
-            if config["APP_ENV"] != "development":
-                app.logger.warning("MAIL_SERVER is not set, so this email is printed, not sent.")
+        if config["APP_ENV"] != "development" and not config.get("MAIL_SERVER"):
+            # Never print it in production: the body holds a reset link.
+            app.logger.warning("MAIL_SERVER is not set, so an email (%s) was not sent.", subject)
+            return None
+        if config["APP_ENV"] == "development":
             print(f"\n----- Email (not sent) -----\nTo: {to}\nSubject: {subject}\n\n"
                   f"{text_body}\n----------------------------\n", flush=True)
             return None

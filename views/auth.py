@@ -29,7 +29,7 @@ login_manager.session_protection = "strong"
 # Pages anyone can open. Everything else redirects to /login. Unknown URLs
 # (no endpoint) get the normal 404 page.
 PUBLIC_ENDPOINTS = {"auth.login", "auth.signup", "auth.logout", "auth.forgot_password",
-                    "auth.reset_password", "static"}
+                    "auth.reset_password", "static", "healthz"}
 
 FORGOT_MESSAGE = ("If an account exists for that email, we've sent a link to reset "
                   "your password. It works for 1 hour.")

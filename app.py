@@ -20,6 +20,7 @@ import threading
 
 import click
 from flask import Flask, current_app, render_template, request
+from werkzeug.wrappers import Response
 
 import db
 import security
@@ -27,6 +28,7 @@ from accounts import assign_unowned, find_user_by_email
 from backup import run_daily_backup
 from config import load_config
 from copy_to_postgres import CopyError, copy_sqlite_to_postgres
+from logs import configure_logging
 from database import initialize_database, is_postgres
 from timeutil import utc_now, utc_today
 from trash import cleanup_trash
@@ -56,7 +58,7 @@ def ensure_daily_backup():
     from loading. It is not retried until the next day (or a server
     restart), so a persistent problem doesn't slow down or spam every request.
     """
-    if request.endpoint == "static":
+    if request.endpoint in ("static", "healthz"):
         return
     database = current_app.config["DATABASE"]
     postgres = is_postgres(database)
@@ -85,6 +87,25 @@ def run_trash_cleanup():
     connection = db.get_db()
     with connection:
         return cleanup_trash(connection, utc_now())
+
+
+@security.limiter.exempt
+def healthz():
+    """For Render's health check: "ok" if the app can reach its database.
+
+    No login, CSRF, rate limit, host or HTTPS checks, and no cookies. Runs
+    SELECT 1 on a fresh connection; any failure is a 503 (the error's type is
+    logged, never connection details).
+    """
+    headers = {"Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store"}
+    try:
+        connection = db.get_db()
+        connection.fetchone("SELECT 1")
+    except Exception as error:
+        current_app.logger.error("Health check failed: database unavailable (%s)",
+                                 type(error).__name__)
+        return Response("database unavailable", 503, headers)
+    return Response("ok", 200, headers)
 
 
 def page_not_found(error):
@@ -133,6 +154,11 @@ def create_app(overrides=None):
     app.config.update(load_config())
     if overrides:
         app.config.update(overrides)
+    configure_logging(app)
+    if app.config["APP_ENV"] == "production" and not app.config.get("MAIL_SERVER"):
+        app.logger.warning("MAIL_SERVER is not set, so password reset emails can't be sent. "
+                           "Set MAIL_SERVER (and MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM) "
+                           "to turn them on.")
 
     # Bring the schema up to date once, at startup (not on every request).
     applied = initialize_database(app.config["DATABASE"])
@@ -155,6 +181,7 @@ def create_app(overrides=None):
     app.register_blueprint(backup_views.bp)
     app.register_blueprint(settings.bp)
 
+    app.add_url_rule("/healthz", "healthz", healthz, methods=["GET", "HEAD"])
     app.register_error_handler(404, page_not_found)
     app.cli.command("init-db")(init_db_command)
     app.cli.command("assign-entries")(assign_entries_command)

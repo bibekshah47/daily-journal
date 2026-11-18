@@ -224,10 +224,48 @@ def _remember_session_identifier(sender, user):
     session["_id"] = sender.login_manager._session_identifier_generator()
 
 
+# ---------- Production: the proxy, HTTPS and trusted hosts ----------
+
+# Answered whatever the host or scheme: Render's health checker calls the
+# app directly, without the public host name or HTTPS.
+UNGUARDED_PATHS = {"/healthz"}
+
+
+def check_host():
+    """Production with TRUSTED_HOSTS set: refuse any other Host header."""
+    allowed = current_app.config.get("ALLOWED_HOSTS")
+    if not allowed or request.path in UNGUARDED_PATHS:
+        return None
+    from werkzeug.sansio.utils import host_is_trusted
+    if not host_is_trusted(request.host, allowed):
+        current_app.logger.warning("Refused a request for an unknown host from %s", client_ip())
+        return "Unknown host.", 400, {"Content-Type": "text/plain; charset=utf-8"}
+    return None
+
+
+def require_https():
+    """Production: send plain-HTTP requests to the same URL over HTTPS.
+
+    GET and HEAD get a permanent redirect (301); anything else 308, so a
+    form post keeps its method and body.
+    """
+    if request.is_secure or request.path in UNGUARDED_PATHS:
+        return None
+    from flask import redirect
+    secure_url = "https://" + request.url.split("://", 1)[1]
+    return redirect(secure_url, 301 if request.method in ("GET", "HEAD") else 308)
+
+
 def init_app(app):
     if app.config["APP_ENV"] == "production":
-        # Render runs the app behind one proxy that sets X-Forwarded-For.
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
+        # Render runs the app behind one proxy that sets X-Forwarded-For and
+        # X-Forwarded-Proto: trust one hop of each, so request.remote_addr is
+        # the visitor and request.is_secure / url_for(_external=True) say https.
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+        # Before every other hook (login check, rate limits, CSRF): first
+        # the host, then HTTPS, so a redirect never points at a forged host.
+        hooks = app.before_request_funcs.setdefault(None, [])
+        hooks[:0] = [check_host, require_https]
 
     # The limiter's check runs before CSRF's, so posts without a token are
     # still counted.

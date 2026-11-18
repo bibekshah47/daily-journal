@@ -85,9 +85,11 @@ def load_config(environ=None):
     port = environ.get("MAIL_PORT", "").strip() or str(DEFAULT_MAIL_PORT)
     if not port.isdigit():
         raise ConfigError(f"MAIL_PORT must be a number, not {port!r}.")
-    # Hosts this app answers to, comma-separated ("journal.example.com").
-    # Links in emails use the request's host, so this stops a forged Host
-    # header from putting someone else's domain in a password reset email.
+    # Production: the hosts this app answers to, comma-separated
+    # ("journal.example.com"). Links in emails use the request's host, so this
+    # stops a forged Host header from putting someone else's domain in a
+    # password reset email. Checked by security.py (not Flask's own
+    # TRUSTED_HOSTS, which would also refuse Render's health checks).
     trusted_hosts = [host.strip() for host in environ.get("TRUSTED_HOSTS", "").split(",")
                      if host.strip()]
 
@@ -113,7 +115,7 @@ def load_config(environ=None):
         "MAIL_USERNAME": environ.get("MAIL_USERNAME", "").strip(),
         "MAIL_PASSWORD": environ.get("MAIL_PASSWORD", ""),
         "MAIL_FROM": environ.get("MAIL_FROM", "").strip(),
-        "TRUSTED_HOSTS": trusted_hosts or None,
+        "ALLOWED_HOSTS": trusted_hosts,
     }
     if production:
         # Never run the interactive debugger on a public server, even if

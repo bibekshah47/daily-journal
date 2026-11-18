@@ -126,10 +126,13 @@ class ProductionProxyTests(SecurityTestCase):
     overrides = {'WTF_CSRF_ENABLED': False, 'APP_ENV': 'production'}
 
     def test_forwarded_for_is_the_client_ip_in_production(self):
+        # As Render's proxy sends them (HTTPS, so no redirect to https).
+        def via_proxy(ip):
+            return {'X-Forwarded-For': ip, 'X-Forwarded-Proto': 'https'}
         for _ in range(5):
-            self.login(headers={'X-Forwarded-For': '203.0.113.1'})
-        self.assertEqual(self.login(headers={'X-Forwarded-For': '203.0.113.1'}).status_code, 429)
-        self.assertEqual(self.login(headers={'X-Forwarded-For': '203.0.113.2'}).status_code, 400)
+            self.login(headers=via_proxy('203.0.113.1'))
+        self.assertEqual(self.login(headers=via_proxy('203.0.113.1')).status_code, 429)
+        self.assertEqual(self.login(headers=via_proxy('203.0.113.2')).status_code, 400)
 
 
 class LockoutTests(SecurityTestCase):
@@ -384,7 +387,8 @@ class ProductionConfigTests(unittest.TestCase):
     def test_production_sends_hsts_and_secure_cookies(self):
         application = self.make_app(self.PRODUCTION)
         self.assertFalse(application.debug)
-        response = application.test_client().get('/login')
+        response = application.test_client().get('/login', headers={'X-Forwarded-Proto': 'https'})
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['Strict-Transport-Security'],
                          'max-age=31536000; includeSubDomains')
         self.assertIn('Secure', ' '.join(response.headers.getlist('Set-Cookie')))

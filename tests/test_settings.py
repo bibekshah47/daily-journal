@@ -589,12 +589,15 @@ class MailerTests(unittest.TestCase):
         for part in ('To: ann@example.com', 'Subject: Hello', 'Body text'):
             self.assertIn(part, printed)
 
-    def test_production_without_a_server_prints_and_warns(self):
+    def test_production_without_a_server_warns_and_never_prints_the_email(self):
+        # The body of a reset email is a secret link: it must not reach the logs.
         self.app.config.update(APP_ENV='production')
-        with self.assertLogs(self.app.logger, 'WARNING'):
+        with self.assertLogs(self.app.logger, 'WARNING') as logs:
             printed, smtp = self.send()
         smtp.assert_not_called()
-        self.assertIn('Body text', printed)
+        self.assertEqual(printed, '')
+        self.assertIn('was not sent', logs.output[0])
+        self.assertNotIn('Body text', ' '.join(logs.output))
 
     def test_production_sends_with_starttls(self):
         self.app.config.update(APP_ENV='production', MAIL_SERVER='smtp.example.com', MAIL_PORT=2525,
@@ -628,8 +631,11 @@ class MailConfigTests(unittest.TestCase):
                                 'TRUSTED_HOSTS': 'journal.example.com, www.journal.example.com'})
         self.assertEqual(settings['MAIL_SERVER'], 'smtp.example.com')
         self.assertEqual(settings['MAIL_PORT'], 587)
-        self.assertEqual(settings['TRUSTED_HOSTS'], ['journal.example.com', 'www.journal.example.com'])
-        self.assertIsNone(load_config({})['TRUSTED_HOSTS'])
+        # Stored as ALLOWED_HOSTS: security.py checks it (production only),
+        # not Flask's own TRUSTED_HOSTS, which would refuse health checks.
+        self.assertEqual(settings['ALLOWED_HOSTS'], ['journal.example.com', 'www.journal.example.com'])
+        self.assertNotIn('TRUSTED_HOSTS', settings)
+        self.assertEqual(load_config({})['ALLOWED_HOSTS'], [])
         self.assertEqual(load_config({'MAIL_PORT': '2525'})['MAIL_PORT'], 2525)
         with self.assertRaisesRegex(ConfigError, 'MAIL_PORT'):
             load_config({'MAIL_PORT': 'abc'})

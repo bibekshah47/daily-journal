@@ -23,6 +23,8 @@ Mood names, emoji and colors are defined once in `MOODS` in `views/shared.py`.
 | `accounts.py` | Email and password rules, password hashing, reset tokens, claiming old entries |
 | `security.py` | CSRF, rate limits, login lockout, security headers |
 | `mailer.py` | Sends email (printed to the terminal in development) |
+| `logs.py`, `gunicorn.conf.py` | Production logging to stdout, with reset tokens redacted |
+| `start.sh` | Render's start command: migrations, then gunicorn |
 | `timeutil.py` | The user's clock (their time zone) and the system clock (UTC) |
 | `database.py` | Connections to SQLite or PostgreSQL behind one API, and `?` placeholder conversion |
 | `migrations.py` | Numbered schema migrations for both databases |
@@ -145,8 +147,8 @@ for local use:
 | `DATABASE` | `journal.db` | Path to the SQLite file (local development). The older `JOURNAL_DATABASE` name still works |
 | `DATABASE_URL` | empty | A PostgreSQL connection string (`postgres://` or `postgresql://`). When set, it is used instead of `DATABASE`. Required in production |
 | `TEST_DATABASE_URL` | empty | Optional: a throwaway PostgreSQL database for running the tests against PostgreSQL |
-| `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | empty, `587` | SMTP (STARTTLS) for reset emails. Without `MAIL_SERVER`, or in development, emails are printed to the terminal |
-| `TRUSTED_HOSTS` | empty | Production: the host name(s) the site is served at, comma-separated. Stops forged links in reset emails |
+| `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | empty, `587` | SMTP (STARTTLS) for reset emails. In development, emails are printed to the terminal instead. In production without `MAIL_SERVER` they aren't sent (or printed: they hold reset links) |
+| `TRUSTED_HOSTS` | empty | Production: the host name(s) the site is served at, comma-separated. Other hosts get a 400 (except `/healthz`), which stops forged links in reset emails |
 
 Variables set in your shell take priority over `.env`. In production
 (`APP_ENV=production`) the app refuses to start unless `SECRET_KEY` is set to a
@@ -226,6 +228,47 @@ too. Flask's built-in server is for local use only. To deploy, set `APP_ENV=prod
 `content` stays plain text for previews and search. `content_html` holds sanitized
 formatting and is NULL on legacy entries. Legacy content is never interpreted as
 HTML. Sanitization runs on submission and when rendering formatted content.
+
+## Deploying to Render
+
+Create a **Web Service** from this repository (Render reads the Python version
+from `.python-version`) with:
+
+| Setting | Value |
+| --- | --- |
+| Build command | `pip install -r requirements.txt` |
+| Start command | `./start.sh` |
+| Health check path | `/healthz` |
+
+`start.sh` runs `flask --app app init-db` (it only applies pending migrations,
+so it is safe on every deploy), then starts gunicorn on Render's `$PORT` with one
+worker and four threads. One worker, because the rate limits are counted in
+memory: several workers would each keep their own counts. `/healthz` answers
+`ok` after a `SELECT 1` on the database, or 503 if the database can't be
+reached; it needs no login and skips the HTTPS, host and rate-limit checks so
+Render's health checker can always reach it.
+
+Environment variables (the service's **Environment** tab):
+
+| Variable | Value |
+| --- | --- |
+| `APP_ENV` | `production` |
+| `SECRET_KEY` | A long random value: `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `DATABASE_URL` | Your PostgreSQL connection string (Neon: **Connect**, then copy it) |
+| `TRUSTED_HOSTS` | The host name(s) the site is served at, comma-separated, e.g. `my-journal.onrender.com` |
+| `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | Optional for now. Without `MAIL_SERVER`, password reset emails aren't sent, and a warning is logged at startup |
+
+In production the app trusts one proxy hop (Render's) for the visitor's IP and
+for HTTPS, so `request.is_secure` is true and links in emails are `https://`.
+Plain-HTTP requests are redirected to HTTPS (301 for GET, 308 for forms), and
+with `TRUSTED_HOSTS` set any other `Host` header gets a 400. Logs go to stdout
+at INFO, where Render shows them. They never include passwords, entry text or
+full email addresses (only a short hash), and password reset tokens are replaced
+with `[redacted]` in app logs and in gunicorn's access log (`gunicorn.conf.py`,
+which gunicorn loads by itself).
+
+To move an existing local journal to the new database, see
+[Moving your SQLite journal to PostgreSQL](#moving-your-sqlite-journal-to-postgresql).
 
 ## Backup & export
 

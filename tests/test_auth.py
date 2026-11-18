@@ -351,7 +351,7 @@ class DisplayNameTests(AuthTestCase):
 class LoggedOutTests(AuthTestCase):
     def test_every_page_and_action_redirects_to_login(self):
         public = {'auth.login', 'auth.signup', 'auth.logout', 'auth.forgot_password',
-                  'auth.reset_password', 'static'}
+                  'auth.reset_password', 'static', 'healthz'}
         checked = set()
         for rule in self.app.url_map.iter_rules():
             if rule.endpoint in public:
