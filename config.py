@@ -15,6 +15,10 @@ except ImportError:   # optional: plain environment variables still work
 if load_dotenv is not None:
     load_dotenv(Path(__file__).with_name(".env"))
 
+# The product name and tagline people see (page titles, emails, exports).
+APP_NAME = "Innerdesk"
+APP_TAGLINE = "A quiet place for your thoughts and your day."
+
 ENVIRONMENTS = ("development", "production")
 
 # Only good enough for running the app on your own computer.

@@ -20,7 +20,9 @@ import threading
 
 from flask import current_app
 
-FROM_NAME = "My Journal"
+from config import APP_NAME
+
+FROM_NAME = APP_NAME
 SMTP_TIMEOUT_SECONDS = 15
 
 

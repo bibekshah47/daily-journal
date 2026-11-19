@@ -1,4 +1,4 @@
-"""My Journal: creates the Flask app and wires the pieces together.
+"""Innerdesk: creates the Flask app and wires the pieces together.
 
 Settings come from config.py (environment variables / .env). The database
 is SQLite locally and PostgreSQL in production (database.py); its schema is

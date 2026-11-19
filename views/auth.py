@@ -11,6 +11,7 @@ from accounts import (RESET_MAX_AGE, EmailTaken, adopt_browser_timezone,
                       find_user_by_email, make_reset_token,
                       normalize_display_name, normalize_email, password_error,
                       set_password, user_for_reset_token)
+from config import APP_NAME
 from db import get_db
 from mailer import send_email
 from timeutil import normalize_timezone
@@ -226,13 +227,13 @@ def send_reset_email(user):
                    _scheme=current_app.config["PREFERRED_URL_SCHEME"])
     greeting = f"Hi {display_name.split()[0]}," if display_name else "Hi,"
     body = (f"{greeting}\n\n"
-            "Someone asked to reset the password for your My Journal account.\n"
+            f"Someone asked to reset the password for your {APP_NAME} account.\n"
             f"To choose a new password, open this link within {RESET_MAX_AGE // 3600} hour:\n\n"
             f"{link}\n\n"
             "If you didn't ask for this, you can ignore this email. "
             "Your password won't change.\n\n"
-            "My Journal\n")
-    send_email(email, "Reset your My Journal password", body)
+            f"{APP_NAME}\n")
+    send_email(email, f"Reset your {APP_NAME} password", body)
 
 
 @bp.route("/reset/<token>", methods=["GET", "POST"])

@@ -96,7 +96,7 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         today = date.today().isoformat()
         self.assertEqual(response.headers['Content-Disposition'],
-                         f'attachment; filename=my-journal-{today}.md')
+                         f'attachment; filename=innerdesk-{today}.md')
         text = response.get_data(as_text=True)
         self.assertIn('## Morning pages', text)
         self.assertIn('## November 3, 2026', text)   # untitled -> date heading
@@ -113,11 +113,11 @@ class BackupTests(unittest.TestCase):
     def test_json_export_has_every_column(self):
         response = self.client.get('/backup/export.json')
         self.assertEqual(response.status_code, 200)
-        self.assertIn(f'my-journal-{date.today().isoformat()}.json',
+        self.assertIn(f'innerdesk-{date.today().isoformat()}.json',
                       response.headers['Content-Disposition'])
         self.assertTrue(response.headers['Content-Disposition'].startswith('attachment'))
         payload = response.get_json()
-        self.assertEqual(payload['app'], 'my-journal')
+        self.assertEqual(payload['app'], 'innerdesk')
         self.assertEqual(payload['version'], backup.EXPORT_VERSION)
         self.assertEqual(backup.EXPORT_VERSION, 2)
         self.assertIn('exported_at', payload)
@@ -160,6 +160,34 @@ class BackupTests(unittest.TestCase):
         self.assertIn('Nothing new to restore. All 3 entries were already here.', page.text)
         self.assertEqual(len(self.rows(empty)), 3)
 
+    def test_backups_from_before_the_rename_still_restore(self):
+        # Files exported as "My Journal" say "app": "my-journal".
+        exported = json.loads(self.client.get('/backup/export.json').data)
+        self.assertEqual(exported['app'], 'innerdesk')
+        for app_name in ('my-journal', 'innerdesk'):
+            with self.subTest(app=app_name):
+                empty = self.new_database(f'empty-{app_name}.db')
+                self.use_database(empty)
+                page = self.restore(json.dumps(dict(exported, app=app_name)).encode())
+                self.assertIn('Restored 3 entries.', page.text)
+                self.assertEqual(len(self.rows(empty)), 3)
+        old_file = {'app': 'my-journal', 'version': 1, 'entries': [
+            {'content': 'From 2025', 'created_at': '2025-03-01T08:00:00'}]}
+        page = self.restore(json.dumps(old_file).encode())
+        self.assertIn('Restored 1 entry.', page.text)
+
+    def test_exports_use_the_new_name(self):
+        today = date.today().isoformat()
+        for extension in ('md', 'json'):
+            with self.subTest(extension=extension):
+                response = self.client.get(f'/backup/export.{extension}')
+                disposition = response.headers['Content-Disposition']
+                self.assertIn(f'filename=innerdesk-{today}.{extension}', disposition)
+                self.assertNotIn('my-journal', disposition)
+        self.assertTrue(self.client.get('/backup/export.md').text.startswith('# Innerdesk\n'))
+        self.assertEqual(backup.EXPORT_APP, 'innerdesk')
+        self.assertEqual(backup.EXPORT_VERSION, 2)   # unchanged by the rename
+
     def test_restore_adds_only_new_entries_and_never_changes_existing(self):
         payload = json.loads(self.client.get('/backup/export.json').data)
         payload['entries'][0]['title'] = 'Renamed in the backup'   # same created_at + content
@@ -185,7 +213,7 @@ class BackupTests(unittest.TestCase):
         cases = [
             (b'{"app": "my-journal"', 'backup.json', "isn't valid JSON"),
             (b'{"app": "other-app", "version": 1, "entries": []}', 'backup.json',
-             "isn't a My Journal backup"),
+             "isn't an Innerdesk backup"),
             (b'{"app": "my-journal", "version": 3, "entries": []}', 'backup.json',
              'can only restore versions 1 to 2'),
             (b'{"app": "my-journal", "version": 2, "entries": [{"content": "x", '
@@ -193,7 +221,7 @@ class BackupTests(unittest.TestCase):
              'backup.json', 'Entry 1 has an invalid list of tags'),
             (b'{"app": "my-journal", "version": 1, "entries": [{"content": "x"}]}',
              'backup.json', 'Entry 1 is missing its text or date'),
-            (b'# My Journal', 'export.md', 'Only .json backups can be restored'),
+            (b'# Innerdesk', 'export.md', 'Only .json backups can be restored'),
         ]
         for data, filename, message in cases:
             with self.subTest(message=message):

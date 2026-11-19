@@ -107,7 +107,7 @@ class NewYorkTests(ZoneAppTestCase):
         self.assertTrue(deleted_at.startswith('2026-11-17T21:00'), deleted_at)
         self.client.post(f'/restore/{entry_id}')
         response = self.client.get('/backup/export.json')
-        self.assertIn('my-journal-2026-11-17.json', response.headers['Content-Disposition'])
+        self.assertIn('innerdesk-2026-11-17.json', response.headers['Content-Disposition'])
         self.assertTrue(response.get_json()['exported_at'].startswith('2026-11-17T21:00'))
 
     def test_history_marks_the_users_today(self):

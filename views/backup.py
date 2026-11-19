@@ -5,8 +5,8 @@ from flask import (Blueprint, current_app, flash, redirect, render_template,
                    request, send_file, url_for)
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from backup import (RestoreError, entries_to_json, entries_to_markdown,
-                    latest_backup_time, parse_backup, restore_entries,
+from backup import (EXPORT_FILE_PREFIX, RestoreError, entries_to_json,
+                    entries_to_markdown, latest_backup_time, parse_backup, restore_entries,
                     restore_message)
 from config import MAX_UPLOAD_MB
 from db import get_db, uses_postgres
@@ -55,7 +55,7 @@ def all_entries_newest_first():
 def download_response(data, extension, mimetype, when):
     response = send_file(
         io.BytesIO(data), mimetype=mimetype, as_attachment=True,
-        download_name=f"my-journal-{when.date().isoformat()}.{extension}",
+        download_name=f"{EXPORT_FILE_PREFIX}-{when.date().isoformat()}.{extension}",
     )
     # Private data: don't let the browser or a proxy keep a copy.
     response.headers["Cache-Control"] = "no-store"

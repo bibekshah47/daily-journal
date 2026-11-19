@@ -1,4 +1,15 @@
-# Daily Journal
+# Innerdesk
+
+A quiet place for your thoughts and your day: a private journal with a rich-text
+editor, moods, tags, daily reflections, a calendar history, weekly reviews and
+insights, and export and restore.
+
+The name and tagline are `APP_NAME` and `APP_TAGLINE` in `config.py`; every page,
+email and export uses them. Browser storage keys still start with `my-journal-`
+and restore still accepts backups marked `"app": "my-journal"`, so drafts and
+backup files from before the rename keep working.
+
+## How it's built
 
 Flask, SQLite, Jinja templates, and vanilla JavaScript. The main journal body uses
 Quill 2.0.3; titles, moods, and optional Daily Reflection answers remain plain text.
@@ -255,7 +266,7 @@ Environment variables (the service's **Environment** tab):
 | `APP_ENV` | `production` |
 | `SECRET_KEY` | A long random value: `python -c "import secrets; print(secrets.token_hex(32))"` |
 | `DATABASE_URL` | Your PostgreSQL connection string (Neon: **Connect**, then copy it) |
-| `TRUSTED_HOSTS` | The host name(s) the site is served at, comma-separated, e.g. `my-journal.onrender.com` |
+| `TRUSTED_HOSTS` | The host name(s) the site is served at, comma-separated, e.g. `innerdesk.onrender.com` |
 | `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | Optional for now. Without `MAIL_SERVER`, password reset emails aren't sent, and a warning is logged at startup |
 
 In production the app trusts one proxy hop (Render's) for the visitor's IP and

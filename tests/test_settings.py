@@ -452,7 +452,7 @@ class ForgotPasswordTests(AccountTestCase):
         self.assertEqual(len(self.outbox), 1)
         mail = self.outbox[0]
         self.assertEqual(mail['to'], TEST_EMAIL)
-        self.assertEqual(mail['subject'], 'Reset your My Journal password')
+        self.assertEqual(mail['subject'], 'Reset your Innerdesk password')
         self.assertIn('Hi Ann,', mail['body'])
         self.assertIn("If you didn't ask for this, you can ignore this email.", mail['body'])
         self.assertRegex(mail['body'], r'http://localhost/reset/[\w.-]+')
@@ -609,7 +609,7 @@ class MailerTests(unittest.TestCase):
         connection.starttls.assert_called_once()
         connection.login.assert_called_once_with('apikey', 'pw')
         message = connection.send_message.call_args[0][0]
-        self.assertEqual(message['From'], 'My Journal <hi@example.com>')
+        self.assertEqual(message['From'], 'Innerdesk <hi@example.com>')
         self.assertEqual(message['To'], 'ann@example.com')
         self.assertEqual(message.get_content().strip(), 'Body text')
 

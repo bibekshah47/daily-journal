@@ -6,7 +6,7 @@
 
 {% block content %}
 <section class="auth-card" aria-labelledby="auth-heading">
-    <p class="auth-brand"><i data-lucide="book-open" aria-hidden="true"></i> My Journal</p>
+    <p class="auth-brand"><i data-lucide="book-open" aria-hidden="true"></i> {{ APP_NAME }}</p>
     <h1 id="auth-heading">Log in</h1>
 
     <form method="POST" action="{{ url_for('auth.login') }}" class="auth-form" novalidate>

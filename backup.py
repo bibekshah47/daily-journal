@@ -14,7 +14,12 @@ from journal_insights import REFLECTION_QUESTIONS
 from rich_text import clean_html
 from tags import normalize_tags, set_entry_tags
 
-EXPORT_APP = "my-journal"
+from config import APP_NAME
+
+EXPORT_APP = "innerdesk"
+# Files made before the rename say "my-journal"; they still restore.
+RESTORABLE_APPS = (EXPORT_APP, "my-journal")
+EXPORT_FILE_PREFIX = "innerdesk"   # innerdesk-2026-11-18.md / .json
 EXPORT_VERSION = 2   # 2 added "tags" to each entry
 # Version 1 files (no tags) are still accepted.
 RESTORABLE_VERSIONS = (1, 2)
@@ -124,7 +129,7 @@ def entries_to_markdown(rows, tags_by_id, exported_at):
     """
     count = len(rows)
     parts = [
-        "# My Journal\n\n"
+        f"# {APP_NAME}\n\n"
         f"Exported {_friendly(exported_at, '%B %d, %Y')} · "
         f"{count} {'entry' if count == 1 else 'entries'}\n"
     ]
@@ -188,9 +193,9 @@ def parse_backup(raw_bytes):
     except (UnicodeDecodeError, json.JSONDecodeError):
         raise RestoreError("That file isn't valid JSON. Choose a .json file "
                            "downloaded from this page.") from None
-    if (not isinstance(payload, dict) or payload.get("app") != EXPORT_APP
+    if (not isinstance(payload, dict) or payload.get("app") not in RESTORABLE_APPS
             or "entries" not in payload):
-        raise RestoreError("That JSON file isn't a My Journal backup. Choose a "
+        raise RestoreError(f"That JSON file isn't an {APP_NAME} backup. Choose a "
                            "file made with “Download .json” on this page.")
     version = payload.get("version")
     # bool is an int in Python: don't let `true` pass as version 1.

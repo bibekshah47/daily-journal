@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 from flask import abort, request, session
 from flask_login import current_user
 
+from config import APP_NAME, APP_TAGLINE
 from db import get_db
 from rich_text import safe_journal_html
 from tags import all_tags_with_counts, get_tags_for_entries
@@ -74,7 +75,8 @@ def register_template_helpers(app):
 
     @app.context_processor
     def shared_template_values():
-        return {"moods": MOODS, "mood_lookup": MOOD_LOOKUP, "draft_key": draft_key(),
+        return {"APP_NAME": APP_NAME, "APP_TAGLINE": APP_TAGLINE,
+                "moods": MOODS, "mood_lookup": MOOD_LOOKUP, "draft_key": draft_key(),
                 # Set when an account is deleted: the next page clears its draft.
                 "clear_draft_key": pop_clear_draft_key()}
 
